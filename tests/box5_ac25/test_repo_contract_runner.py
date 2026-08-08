@@ -417,7 +417,7 @@ def test_spaced_primary_guard_survives_parsing(repo, world, tmp_path):
     assert receipt.primary_failed_guard == guard_name
     assert receipt.primary_failed_guard_line_bytes > 0
     assert receipt.failing_guard_keys == ("SOME_GUARD_OK",)
-    assert receipt.contract_unparsed_line_count == 1
+    assert receipt.contract_unparsed_line_count == 0
     assert receipt.contract_unparsed_manifest_sha256
 
 

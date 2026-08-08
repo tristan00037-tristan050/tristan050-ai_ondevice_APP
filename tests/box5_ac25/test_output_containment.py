@@ -540,6 +540,7 @@ def test_workflow_uploads_only_approved_test_evidence():
         "ac25-junit.xml", "ac25-selftest.json", "ac25-publish.tap",
         "ac25-clean-status.porcelain-v2.z",
         "ac25-contract",
+        "payload-manifest.json", "ac25-v44-contract", "ac25-evidence",
     }
     for path in WORKFLOWS:
         body = path.read_text(encoding="utf-8")

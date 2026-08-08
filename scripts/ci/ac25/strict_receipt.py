@@ -1,4 +1,4 @@
-"""AC-25 R6 close receipt primitives (v4.2).
+"""AC-25 R6 close receipt primitives (v4.2 plus v4.4 strict observations).
 
 Only raw, digest-bound evidence is accepted.  The module deliberately uses the
 Python standard library so the protected workflow can import it with ``-S``.
@@ -15,6 +15,8 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Iterable, Mapping, Sequence
+
+from .v44_types import JUnitObservation, JUnitTestIdentity, TapObservation, TapTestIdentity
 
 
 SCHEMA_VERSION = "butler.ac25.r6_close_receipt.v2"
@@ -345,6 +347,185 @@ def parse_tap(raw: bytes) -> TapCounts:
         sum(state == "not ok" for state, _number, _directive in results),
         sum(directive == "SKIP" for _state, _number, directive in results),
         sum(directive == "TODO" for _state, _number, directive in results),
+    )
+
+
+def _identity_text(value: object, code: str) -> str:
+    if (
+        not isinstance(value, str) or not value
+        or value != unicodedata.normalize("NFC", value)
+        or CONTROL_RE.search(value)
+    ):
+        raise StrictReceiptError(code)
+    return value
+
+
+def parse_junit_observation(
+    raw: bytes, *, artifact_logical_id: str, shard_id: str, xml_path: str
+) -> JUnitObservation:
+    """Parse only the explicitly supported pytest JUnit shapes."""
+    if len(raw) > JUNIT_FILE_MAX_BYTES:
+        raise StrictReceiptError("JUNIT_SIZE_LIMIT")
+    if b"<!DOCTYPE" in raw.upper() or b"<!ENTITY" in raw.upper():
+        raise StrictReceiptError("JUNIT_MALFORMED")
+    try:
+        root = ET.fromstring(raw)
+    except ET.ParseError as exc:
+        raise StrictReceiptError("JUNIT_MALFORMED") from exc
+    if root.tag not in ("testsuite", "testsuites"):
+        raise StrictReceiptError("JUNIT_MALFORMED")
+    suites = [root] if root.tag == "testsuite" else list(root)
+    if not suites or any(suite.tag != "testsuite" for suite in suites):
+        raise StrictReceiptError("JUNIT_MALFORMED")
+    identities: list[JUnitTestIdentity] = []
+    failures = errors = skipped = 0
+    for suite in suites:
+        if any(child.tag == "testsuite" for child in suite):
+            raise StrictReceiptError("JUNIT_MALFORMED")
+        cases = [child for child in suite if child.tag == "testcase"]
+        declared: dict[str, int] = {}
+        for key in ("tests", "failures", "errors", "skipped"):
+            value = suite.get(key)
+            if value is None or DECIMAL_RE.fullmatch(value) is None:
+                raise StrictReceiptError("JUNIT_MALFORMED")
+            declared[key] = int(value)
+        suite_failures = suite_errors = suite_skipped = 0
+        for case in cases:
+            terminal = [child.tag for child in case if child.tag in ("failure", "error", "skipped")]
+            if len(terminal) > 1:
+                raise StrictReceiptError("JUNIT_MALFORMED")
+            classname = _identity_text(case.get("classname"), "JUNIT_MALFORMED")
+            name = _identity_text(case.get("name"), "JUNIT_MALFORMED")
+            identities.append(JUnitTestIdentity(
+                _identity_text(artifact_logical_id, "JUNIT_MALFORMED"),
+                _identity_text(shard_id, "JUNIT_MALFORMED"),
+                validate_path(xml_path), classname, name,
+            ))
+            suite_failures += terminal == ["failure"]
+            suite_errors += terminal == ["error"]
+            suite_skipped += terminal == ["skipped"]
+        if declared != {
+            "tests": len(cases), "failures": suite_failures,
+            "errors": suite_errors, "skipped": suite_skipped,
+        }:
+            raise StrictReceiptError("JUNIT_MALFORMED")
+        failures += suite_failures
+        errors += suite_errors
+        skipped += suite_skipped
+    if len(identities) != len(set(identities)):
+        raise StrictReceiptError("JUNIT_DUPLICATE_IDENTITY")
+    return JUnitObservation(
+        total=len(identities), failures=failures, errors=errors, skipped=skipped,
+        identities=tuple(identities), source_sha256=sha256_bytes(raw),
+    )
+
+
+_TAP_V44_RESULT_RE = re.compile(r"\A(not ok|ok)\s+([0-9]+)(.*)\Z", re.IGNORECASE)
+_TAP_V44_PLAN_RE = re.compile(r"\A1\.\.([0-9]+)(?:\s+#.*)?\Z", re.IGNORECASE)
+_TAP_V44_SUBTEST_RE = re.compile(r"\A# Subtest:\s*(.+)\Z")
+
+
+def parse_tap_observation(
+    raw: bytes, *, artifact_logical_id: str, shard_id: str, tap_path: str
+) -> TapObservation:
+    """Parse TAP 13 with separate numbering spaces for nested subtests."""
+    if len(raw) > TAP_FILE_MAX_BYTES:
+        raise StrictReceiptError("TAP_MALFORMED")
+    try:
+        lines = raw.decode("utf-8", "strict").splitlines()
+    except UnicodeDecodeError as exc:
+        raise StrictReceiptError("TAP_MALFORMED") from exc
+    if sum(line.strip() == "TAP version 13" for line in lines) != 1:
+        raise StrictReceiptError("TAP_MALFORMED")
+    if any(line.lstrip().lower().startswith("bail out!") for line in lines):
+        raise StrictReceiptError("TAP_MALFORMED")
+
+    markers: dict[int, str] = {}
+    plans: dict[tuple[str, ...], int] = {}
+    numbers: dict[tuple[str, ...], list[int]] = {}
+    identities: list[TapTestIdentity] = []
+    failed = skipped = todo = 0
+    yaml_indent: int | None = None
+
+    def context(indent: int) -> tuple[str, ...]:
+        return tuple(markers[level] for level in sorted(markers) if level < indent)
+
+    for source_line in lines:
+        if "\t" in source_line:
+            raise StrictReceiptError("TAP_MALFORMED")
+        indent = len(source_line) - len(source_line.lstrip(" "))
+        stripped = source_line.strip()
+        if not stripped:
+            continue
+        if yaml_indent is not None:
+            if stripped == "..." and indent == yaml_indent:
+                yaml_indent = None
+            continue
+        if stripped == "---":
+            yaml_indent = indent
+            continue
+        if stripped == "TAP version 13" or stripped.startswith("# ") and not stripped.startswith("# Subtest:"):
+            continue
+        marker = _TAP_V44_SUBTEST_RE.fullmatch(stripped)
+        if marker is not None:
+            for level in tuple(markers):
+                if level >= indent:
+                    del markers[level]
+            markers[indent] = _identity_text(marker.group(1).strip(), "TAP_MALFORMED")
+            continue
+        plan = _TAP_V44_PLAN_RE.fullmatch(stripped)
+        if plan is not None:
+            path = context(indent)
+            count = int(plan.group(1))
+            if count <= 0 or path in plans:
+                raise StrictReceiptError("TAP_ZERO_TESTS" if count <= 0 else "TAP_MALFORMED")
+            plans[path] = count
+            continue
+        match = _TAP_V44_RESULT_RE.fullmatch(stripped)
+        if match is None:
+            raise StrictReceiptError("TAP_MALFORMED")
+        state, number_text, remainder = match.groups()
+        directive = ""
+        directive_match = re.search(r"\s+#\s*(SKIP|TODO)(?:\s+.*)?\Z", remainder, re.IGNORECASE)
+        if directive_match is not None:
+            directive = directive_match.group(1).upper()
+            remainder = remainder[:directive_match.start()]
+        name = remainder.strip()
+        if name.startswith("-"):
+            name = name[1:].strip()
+        name = _identity_text(name, "TAP_MALFORMED")
+        path = context(indent)
+        if indent in markers and markers[indent] != name:
+            raise StrictReceiptError("TAP_MALFORMED")
+        number = int(number_text)
+        if number <= 0:
+            raise StrictReceiptError("TAP_MALFORMED")
+        numbers.setdefault(path, []).append(number)
+        identities.append(TapTestIdentity(
+            _identity_text(artifact_logical_id, "TAP_MALFORMED"),
+            _identity_text(shard_id, "TAP_MALFORMED"), validate_path(tap_path),
+            path, number, name,
+        ))
+        failed += state.lower() == "not ok"
+        skipped += directive == "SKIP"
+        todo += directive == "TODO"
+        for level in tuple(markers):
+            if level >= indent:
+                del markers[level]
+    if yaml_indent is not None or not identities:
+        raise StrictReceiptError("TAP_MALFORMED" if yaml_indent is not None else "TAP_ZERO_TESTS")
+    if len(identities) != len(set(identities)):
+        raise StrictReceiptError("TAP_DUPLICATE_IDENTITY")
+    if set(plans) != set(numbers):
+        raise StrictReceiptError("TAP_MALFORMED")
+    for path, observed_numbers in numbers.items():
+        expected = list(range(1, plans[path] + 1))
+        if observed_numbers != expected:
+            raise StrictReceiptError("TAP_MALFORMED")
+    return TapObservation(
+        planned=sum(plans.values()), seen=len(identities), failed=failed,
+        skipped=skipped, todo=todo, identities=tuple(identities),
+        source_sha256=sha256_bytes(raw),
     )
 
 

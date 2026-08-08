@@ -381,7 +381,8 @@ def test_extraction_captures_the_real_preparation():
         "npx --prefix webcore_appcore_starter_4_17/scripts/web_e2e playwright "
         "install --with-deps chromium",
         "bash scripts/ops/gen_build_stamp_v1.sh",
-        "bash scripts/ops/gen_artifact_chain_proof_v2.sh",
+        "bash scripts/ops/gen_artifact_chain_proof_v2.sh --output "
+        "/runner/temp/ac25-evidence/artifact_chain_proof_v2.json",
     ):
         assert required in argvs, required
     assert all(step.shell == "bash" for step in plan.preparation)

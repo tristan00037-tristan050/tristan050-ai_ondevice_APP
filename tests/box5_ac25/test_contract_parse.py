@@ -136,10 +136,8 @@ def test_unparsed_manifest_is_deterministic():
     first = cpar.parse_contract_output(payload)
     second = cpar.parse_contract_output(payload)
     assert first.unparsed_manifest_sha256 == second.unparsed_manifest_sha256
-    assert first.unparsed_line_count == 2
-    assert first.unparsed_total_bytes == len(b"== guard: alpha ==") + len(
-        b"== guard: beta =="
-    )
+    assert first.unparsed_line_count == 1
+    assert first.unparsed_total_bytes == len(b"KEY_A=1")
 
 
 def test_raw_unparsed_content_never_leaves_the_parser():
@@ -169,10 +167,11 @@ def test_named_guard_passes_through_resolution_unchanged():
 
 
 # ══ 구조화 키 규칙 ═════════════════════════════════════════════════════
-def test_keys_preserve_order_and_values():
-    payload = line("KEY_B", "x") + line("KEY_A", "y")
+def test_unknown_keys_are_not_promoted_to_meta_mapping():
+    payload = line(PRIMARY, "NONE") + line("KEY_B", "x") + line("KEY_A", "y")
     result = cpar.parse_contract_output(payload)
-    assert result.keys == (("KEY_B", "x"), ("KEY_A", "y"))
+    assert result.keys == ()
+    assert result.parse_error_code == cpar.CONTRACT_UNKNOWN_LINE
 
 
 def test_failing_keys_digest_is_deterministic():

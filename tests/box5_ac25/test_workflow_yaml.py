@@ -215,6 +215,6 @@ def test_canonical_extraction_still_works_without_pyyaml(monkeypatch):
 
     monkeypatch.setattr(builtins, "__import__", blocked)
     plan = cp.extract_canonical_plan(REPO_ROOT, runner_temp="/runner/temp")
-    assert len(plan.preparation) == 9
-    assert len(plan.contract_env) == 6
+    assert len(plan.preparation) == 10
+    assert len(plan.contract_env) == 7
     assert plan.contract_argv == ("bash", cp.CONTRACT_SCRIPT)

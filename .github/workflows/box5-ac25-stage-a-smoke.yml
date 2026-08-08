@@ -33,6 +33,7 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: read
+      actions: read
     steps:
       - name: Checkout candidate at exact PR head
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -113,14 +114,34 @@ jobs:
             exit 1
           fi
 
+      - name: Bind Python evidence to exact run attempt and job
+        id: python_artifact
+        env:
+          PYTHONPATH: scripts/ci
+          PYTHONNOUSERSITE: '1'
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY_ID: ${{ github.repository_id }}
+          AC25_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          python3 -S -m ac25.candidate_artifact_v44 \
+            --logical-id ac25-v44-python \
+            --job-name ac25-stage-b-smoke \
+            --output "${RUNNER_TEMP}/payload-manifest.json" \
+            --file junit.xml="${RUNNER_TEMP}/ac25-junit.xml" \
+            --file selftest.json="${RUNNER_TEMP}/ac25-selftest.json" \
+            --file clean-status.porcelain-v2.z="${RUNNER_TEMP}/ac25-clean-status.porcelain-v2.z"
+
       - name: Upload raw Python acceptance evidence
+        id: upload_python_artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: ac25-v42-python-${{ github.event.pull_request.head.sha }}
+          name: ${{ steps.python_artifact.outputs.artifact_name }}
           path: |
             ${{ runner.temp }}/ac25-junit.xml
             ${{ runner.temp }}/ac25-selftest.json
             ${{ runner.temp }}/ac25-clean-status.porcelain-v2.z
+            ${{ runner.temp }}/payload-manifest.json
           if-no-files-found: error
           retention-days: 14
 
@@ -130,6 +151,7 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: read
+      actions: read
     steps:
       - name: Checkout candidate at exact PR head
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -248,11 +270,30 @@ jobs:
           node --test --test-reporter=tap tests/box5_ac25/publish_check.test.mjs \
             > "${RUNNER_TEMP}/ac25-publish.tap"
 
+      - name: Bind Node evidence to exact run attempt and job
+        id: node_artifact
+        env:
+          PYTHONPATH: scripts/ci
+          PYTHONNOUSERSITE: '1'
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY_ID: ${{ github.repository_id }}
+          AC25_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          python3 -S -m ac25.candidate_artifact_v44 \
+            --logical-id ac25-v44-node \
+            --job-name ac25-publish-check-executable-test \
+            --output "${RUNNER_TEMP}/payload-manifest.json" \
+            --file publish.tap="${RUNNER_TEMP}/ac25-publish.tap"
+
       - name: Upload raw Node acceptance evidence
+        id: upload_node_artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: ac25-v42-node-${{ github.event.pull_request.head.sha }}
-          path: ${{ runner.temp }}/ac25-publish.tap
+          name: ${{ steps.node_artifact.outputs.artifact_name }}
+          path: |
+            ${{ runner.temp }}/ac25-publish.tap
+            ${{ runner.temp }}/payload-manifest.json
           if-no-files-found: error
           retention-days: 14
 
@@ -295,6 +336,8 @@ jobs:
           PYTHONDONTWRITEBYTECODE: '1'
           AC25_EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           AC25_BASE_REF: ${{ github.event.pull_request.base.sha }}
+          AC25_CONTRACT_EVIDENCE_ROOT: ${{ runner.temp }}/ac25-v44-contract
+          AC25_EVIDENCE_ROOT: ${{ runner.temp }}/ac25-v44-contract
           PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
         run: |
           set -euo pipefail

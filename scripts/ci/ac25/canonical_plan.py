@@ -662,6 +662,8 @@ def _compare_harness(harness: tuple[CanonicalRunStep, ...]) -> PlanDiff:
         env = dict(step.env)
         expected_keys = {
             "AC25_BASE_REF",
+            "AC25_CONTRACT_EVIDENCE_ROOT",
+            "AC25_EVIDENCE_ROOT",
             "AC25_EVENT_HEAD_SHA",
             "GIT_LFS_SKIP_SMUDGE",
             "PLAYWRIGHT_BROWSERS_PATH",
@@ -676,6 +678,9 @@ def _compare_harness(harness: tuple[CanonicalRunStep, ...]) -> PlanDiff:
             and set(env) == expected_keys
             and env["AC25_BASE_REF"] == PR_BASE_MARKER
             and env["AC25_EVENT_HEAD_SHA"] == EXACT_HEAD_MARKER
+            and env["AC25_CONTRACT_EVIDENCE_ROOT"].startswith("/")
+            and env["AC25_CONTRACT_EVIDENCE_ROOT"].endswith("/ac25-v44-contract")
+            and env["AC25_EVIDENCE_ROOT"] == env["AC25_CONTRACT_EVIDENCE_ROOT"]
             and env["GIT_LFS_SKIP_SMUDGE"] == "1"
             and env["PYTHONNOUSERSITE"] == "1"
             and env["PYTHONDONTWRITEBYTECODE"] == "1"

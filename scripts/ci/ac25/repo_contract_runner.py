@@ -212,7 +212,9 @@ def _evidence_root(root: Path, environment: dict[str, str]) -> Path | None:
     configured = environment.get("AC25_CONTRACT_EVIDENCE_ROOT", "")
     if not configured:
         return None
-    candidate = Path(configured).resolve()
+    candidate = Path(configured)
+    if not candidate.is_absolute() or any(part in ("", ".", "..") for part in candidate.parts[1:]):
+        raise RepoContractError(OUTPUT_ROOT_POLICY_VIOLATION)
     repository = root.resolve()
     try:
         candidate.relative_to(repository)
@@ -220,7 +222,21 @@ def _evidence_root(root: Path, environment: dict[str, str]) -> Path | None:
         pass
     else:
         raise RepoContractError(OUTPUT_ROOT_POLICY_VIOLATION)
-    candidate.mkdir(parents=True, exist_ok=True, mode=0o700)
+    try:
+        candidate.mkdir(mode=0o700)
+    except FileExistsError:
+        pass
+    try:
+        mode = candidate.lstat().st_mode
+        descriptor = os.open(candidate, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    except (OSError, AttributeError) as exc:
+        raise RepoContractError(OUTPUT_ROOT_POLICY_VIOLATION) from exc
+    try:
+        if not stat.S_ISDIR(mode):
+            raise RepoContractError(OUTPUT_ROOT_POLICY_VIOLATION)
+        os.fchmod(descriptor, 0o700)
+    finally:
+        os.close(descriptor)
     return candidate
 
 
@@ -585,6 +601,8 @@ def run_exact_head_contracts(
             contract_env = contract_environment(
                 root, base_env=environment, runner_temp=str(temp)
             )
+            if evidence_root is not None:
+                contract_env["AC25_EVIDENCE_ROOT"] = str(evidence_root)
             receipt.contract_env_keys = sorted(
                 key for key, _value in expected.contract_env
             )

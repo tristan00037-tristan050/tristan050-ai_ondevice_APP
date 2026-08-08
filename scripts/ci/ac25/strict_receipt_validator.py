@@ -1,4 +1,4 @@
-"""Independent AC-25 R6 v4.2 delivery and receipt verifier.
+"""Independent AC-25 R6 delivery verifier and v4.4 pure authority interface.
 
 The receipt is data, never authority.  Every acceptance gate is recomputed
 from digest-bound raw evidence, Git objects, delivery bytes, and (for the gate
@@ -25,6 +25,7 @@ from . import contract_parse
 from . import output_containment
 from . import receipt_schema
 from . import strict_receipt as sr
+from .strict_v44 import require_authority_verdict, validate_strict_receipt
 
 
 REPOSITORY = "tristan00037-tristan050/tristan050-ai_ondevice_APP"
@@ -49,6 +50,8 @@ REQUIRED_COMMANDS = (
     ("node", "--test", TEST_ROOT + "/publish_check.test.mjs"),
     CLEAN_STATUS_COMMAND,
 )
+
+__all__ = ["require_authority_verdict", "validate_strict_receipt"]
 
 
 class GateFailure(Exception):

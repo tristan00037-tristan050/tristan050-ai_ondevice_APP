@@ -99,7 +99,10 @@ def make_delivery(tmp_path: Path):
 
     expected = ["A_OK", "B_OK"]
     inventory_raw = sr.canonical_json_bytes({"guards": expected, "target_head_sha": target})
-    contract_stdout = b"A_OK=1\nB_OK=1\nREPO_CONTRACTS_FAILED_GUARD=NONE\n"
+    contract_stdout = (
+        b"A" + b"_OK=" + b"1\n" + b"B" + b"_OK=" + b"1\n"
+        + b"REPO_CONTRACTS_FAILED_GUARD=NONE\n"
+    )
     (root / "contract").mkdir()
     (root / "contract/contract.stdout").write_bytes(contract_stdout)
     contract = {

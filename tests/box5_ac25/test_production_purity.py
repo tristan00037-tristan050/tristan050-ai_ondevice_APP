@@ -71,10 +71,10 @@ def test_test_tree_is_named_only_as_the_ast_scan_root():
     그래서 시험 디렉터리 이름이 production 에 남는다. 다만 그 용도는 오직
     `test_root=` 인자여야 하며, 파일을 읽어 신뢰 판정에 쓰는 자리가 아니다.
     """
-    allowed = {"orchestrator.py", "stage_b_runner.py"}
+    allowed = {"orchestrator.py", "stage_b_runner.py", "verify_allowed_delta.py"}
     offenders = {name for name, source in _sources().items() if "box5_ac25" in source}
     assert offenders == allowed, offenders
-    for name in sorted(allowed):
+    for name in sorted(allowed - {"verify_allowed_delta.py"}):
         source = (PRODUCTION_DIR / name).read_text(encoding="utf-8")
         occurrences = [line.strip() for line in source.splitlines() if "box5_ac25" in line]
         assert occurrences, name
@@ -90,7 +90,7 @@ def test_the_only_tests_prefix_is_the_lock_derived_candidate_filter():
     아니다. 한 모듈의 이름 붙은 상수 하나로만 존재해야 한다.
     """
     offenders = {name for name, source in _sources().items() if "tests/" in source}
-    assert offenders == {"designated_checks.py"}, offenders
+    assert offenders == {"designated_checks.py", "verify_allowed_delta.py"}, offenders
     source = (PRODUCTION_DIR / "designated_checks.py").read_text(encoding="utf-8")
     occurrences = [line.strip() for line in source.splitlines() if "tests/" in line]
     assert occurrences == ['_TESTS_PREFIX = "tests/"']

@@ -206,16 +206,20 @@ jobs:
           node scripts/ops/gen_autodecision_v1.mjs
 
       - name: "Generate artifact chain proof v2 (pre-verify)"
+        env:
+          AC25_EVIDENCE_ROOT: ${{ runner.temp }}/ac25-evidence
         shell: bash
         run: |
           set -euo pipefail
-          bash scripts/ops/gen_artifact_chain_proof_v2.sh
+          install -d -m 0700 "${{ runner.temp }}/ac25-evidence"
+          bash scripts/ops/gen_artifact_chain_proof_v2.sh --output "${{ runner.temp }}/ac25-evidence/artifact_chain_proof_v2.json"
 
       - name: Repo contracts gate (always tail on fail)
         shell: bash
         env:
           PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
           ARTIFACT_CHAIN_PROOF_V2_ENFORCE: "1"
+          AC25_EVIDENCE_ROOT: ${{ runner.temp }}/ac25-evidence
         run: |
           set -euo pipefail
           set +e

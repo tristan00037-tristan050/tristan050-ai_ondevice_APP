@@ -1,17 +1,32 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Euo pipefail
+shopt -s inherit_errexit 2>/dev/null || true
 echo "P0_02_KEYS_ONLY_VAL=${REPO_GUARD_KEYS_ONLY:-unset}"
 
 CURRENT_GUARD="NONE"
-FAILED_GUARD="NONE"
-FAILED_GUARD_EMITTED=0
+FIRST_FAILED_GUARD="NONE"
+FAILURE_RECORDED=0
+PRIMARY_EMITTED=0
 
-emit_failed_guard_once() {
-  if [ "${FAILED_GUARD_EMITTED}" -eq 0 ]; then
-    FAILED_GUARD="${CURRENT_GUARD}"
-    echo "REPO_CONTRACTS_FAILED_GUARD=${FAILED_GUARD}"
-    FAILED_GUARD_EMITTED=1
+record_first_failure() {
+  if (( FAILURE_RECORDED == 0 )); then
+    FIRST_FAILED_GUARD="${CURRENT_GUARD:-UNKNOWN}"
+    FAILURE_RECORDED=1
   fi
+}
+
+emit_primary_once() {
+  if (( PRIMARY_EMITTED == 0 )); then
+    printf '%s\n' "REPO_CONTRACTS_FAILED_GUARD=${FIRST_FAILED_GUARD}"
+    PRIMARY_EMITTED=1
+  fi
+}
+
+on_error() {
+  local rc=$?
+  record_first_failure
+  trap - ERR
+  exit "$rc"
 }
 
 REPO_CONTRACTS_HYGIENE_OK=0
@@ -646,9 +661,8 @@ ONPREM_DELIVERED_KEYSET_PRESENT_OK=0
 ONPREM_DELIVERED_KEYSET_GUARD_OK=0
 
 cleanup(){
-  # DoD block 밖: 디버그 키 (LAST=마지막 실행 가드, FAILED=실패한 가드명, 성공 시 NONE)
+  # DoD block 밖: primary가 아닌 meta-only 진단만 출력한다.
   echo "REPO_CONTRACTS_LAST_GUARD=${CURRENT_GUARD}"
-  echo "REPO_CONTRACTS_FAILED_GUARD=${FAILED_GUARD}"
   echo "REPO_GUARD_KEYS_ONLY_MODE_OK=${REPO_GUARD_KEYS_ONLY_MODE_OK}"
   echo "META_ONLY_OUTPUT_GUARD_V1_OK=${META_ONLY_OUTPUT_GUARD_V1_OK}"
   echo "PATH_SCOPE_READ_REQUIRED_OK=${PATH_SCOPE_READ_REQUIRED_OK}"
@@ -1199,9 +1213,35 @@ cleanup(){
   echo "RELEASE_BLOCKED_WITHOUT_GATES_OK=${RELEASE_BLOCKED_WITHOUT_GATES_OK}"
   echo "DOD_KV_BLOCK_END=1"
 }
-# EXIT: on non-zero exit emit failed guard once then cleanup; success(0) emits nothing extra
-trap 'rc=$?; if [ "$rc" -ne 0 ]; then emit_failed_guard_once; fi; cleanup' EXIT
-trap 'emit_failed_guard_once' ERR
+
+cleanup_non_primary_diagnostics(){
+  cleanup "$@"
+}
+
+on_exit() {
+  local rc="${EXIT_STATUS:-1}"
+  local cleanup_rc=0
+  trap - ERR EXIT
+  set +e
+  if (( rc != 0 )); then
+    record_first_failure
+  fi
+  cleanup_non_primary_diagnostics "$rc"
+  cleanup_rc=$?
+  if (( rc == 0 && cleanup_rc != 0 )); then
+    CURRENT_GUARD="cleanup diagnostics"
+    rc=$cleanup_rc
+    record_first_failure
+  fi
+  emit_primary_once
+  exit "$rc"
+}
+
+# Bash 3.2 reports status 0 to EXIT for a `set -u` expansion failure when
+# `errexit` is active.  An explicit ERR handler preserves errexit semantics for
+# ordinary commands while leaving nounset's real 127 status intact.
+trap 'on_error' ERR
+trap 'EXIT_STATUS=$?; on_exit' EXIT
 
 run_guard() {
   local name="$1"
@@ -1335,7 +1375,15 @@ run_guard "verify exit codes v1" bash scripts/verify/verify_exit_codes_v1.sh
 VERIFY_EXIT_CODES_V1_OK=1
 
 echo "== guard: artifact chain proof v2 (P22-P1-13) =="
-run_guard "artifact chain proof v2" bash scripts/verify/verify_artifact_chain_proof_v2.sh
+if [[ -z "${AC25_EVIDENCE_ROOT:-}" ]]; then
+  CURRENT_GUARD="artifact chain proof v2"
+  echo "ERROR_CODE=OUTPUT_PATH_REQUIRED"
+  exit 1
+fi
+run_guard "artifact chain proof v2" \
+  env PYTHONPATH="scripts/ci" python3 -S -m ac25.artifact_chain_v44 \
+  --evidence-root "${AC25_EVIDENCE_ROOT}" \
+  --path "${AC25_EVIDENCE_ROOT}/artifact_chain_proof_v2.json"
 ARTIFACT_CHAIN_PROOF_V2_OK=1
 
 echo "== guard: artifact chain proof generator wiring v1 (P22-P1-13A) =="
@@ -1546,7 +1594,6 @@ CURRENT_GUARD="onprem proof freshness"
 if ! freshness_output="$(bash scripts/verify/verify_onprem_proof_freshness.sh)"; then
   echo "$freshness_output"
   echo "FAIL: onprem proof freshness"
-  emit_failed_guard_once
   exit 1
 fi
 echo "$freshness_output"
@@ -1556,7 +1603,6 @@ elif echo "$freshness_output" | grep -q '^ONPREM_PROOF_LATEST_FRESH_SKIPPED=1$';
   ONPREM_PROOF_LATEST_FRESH_SKIPPED=1
 else
   echo "FAIL: onprem proof freshness"
-  emit_failed_guard_once
   exit 1
 fi
 
