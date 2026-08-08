@@ -328,9 +328,14 @@ def _workflow_bytes(value: Mapping[str, Any]) -> bytes:
     if value.get("encoding") != "base64" or type(content) is not str:
         raise ProtectedBootstrapError("UNTRUSTED_WORKFLOW_IDENTITY_INVALID")
     try:
-        return base64.b64decode(content, validate=True)
-    except (TypeError, ValueError) as exc:
+        encoded = content.encode("ascii")
+        normalized = encoded.replace(b"\r", b"").replace(b"\n", b"")
+        decoded = base64.b64decode(normalized, validate=True)
+    except (UnicodeError, ValueError) as exc:
         raise ProtectedBootstrapError("UNTRUSTED_WORKFLOW_IDENTITY_INVALID") from exc
+    if base64.b64encode(decoded) != normalized:
+        raise ProtectedBootstrapError("UNTRUSTED_WORKFLOW_IDENTITY_INVALID")
+    return decoded
 
 
 def _record_dataclass(
