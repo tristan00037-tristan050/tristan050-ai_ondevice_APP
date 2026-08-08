@@ -24,6 +24,12 @@ env:
 jobs:
   trusted-evidence:
     name: firstscreen-learning-trusted-evidence
+    # 이 검사기는 PR 전용 설계다. trusted_firstscreen_run.py 가 upstream run 의
+    # event == "pull_request" 를 요구하고(EXPECTED_EVENT), pull_requests 목록이 정확히
+    # 1건이어야 하며, producer_ref 를 refs/pull/<번호>/merge 로 고정한다. push ·
+    # merge_group · workflow_dispatch 에서는 성립할 수 없다.
+    # 앞 작업이 성공하지 않았으면 검증할 증거 자체가 없으므로 역시 돌지 않는다.
+    if: github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
