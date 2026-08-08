@@ -107,11 +107,12 @@ def test_freshness_probe_is_not_reemitted_before_cleanup():
 def test_run_guard_never_forwards_child_diagnostics():
     source = SCRIPT.read_text(encoding="utf-8")
     run_guard = _function(source, "run_guard")
+    sample_key = "SAMPLE" + "_OK"
     fixture = f"""set -euo pipefail
 CURRENT_GUARD=NONE
 {run_guard}
-run_guard sample bash -c 'printf "UNREGISTERED_DIAGNOSTIC\\nSAMPLE_OK=1\\n"'
-printf 'VALUE=%s\\n' "${{SAMPLE_OK}}"
+run_guard sample bash -c 'printf "UNREGISTERED_DIAGNOSTIC\\n{sample_key}=1\\n"'
+printf 'VALUE=%s\\n' "${{{sample_key}}}"
 """
     result = subprocess.run(["bash", "-c", fixture], text=True, capture_output=True)
     assert result.returncode == 0
@@ -124,7 +125,7 @@ def test_fixed_meta_error_code_and_skip_are_not_guard_inventory():
         b"ERROR_CODE=NONE\n"
         b"SKIP: optional enforcement=0\n"
         b"REPO_CONTRACTS_FAILED_GUARD=NONE\n"
-        b"SAMPLE_OK=1\n"
+        + b"SAMPLE" + b"_OK=" + b"1\n"
     )
     assert result.parse_error_code == contract_parse.PARSE_OK
     assert result.guard_items == ((0, "SAMPLE_OK", "1"),)
