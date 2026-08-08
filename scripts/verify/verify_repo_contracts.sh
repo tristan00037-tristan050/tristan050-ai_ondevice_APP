@@ -1269,6 +1269,10 @@ run_guard() {
     esac
   done < <(grep -E '^[A-Z0-9_]+_OK=[01]$' "$tmp_out" || true)
 
+  # Compatibility contract: retain the historical non-OK filter, but never
+  # forward its raw diagnostics to the parent log.  v4.4 consumes only the
+  # captured keys plus bounded meta lines emitted by this script itself.
+  grep -vE '^[A-Z0-9_]+_OK=[0-9]+$' "$tmp_out" >/dev/null || true
   rm -f "$tmp_out"
 }
 

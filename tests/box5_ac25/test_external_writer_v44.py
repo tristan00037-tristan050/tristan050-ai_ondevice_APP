@@ -139,13 +139,22 @@ def test_generator_leaves_worktree_byte_identical(tmp_path):
 
 
 def test_all_call_sites_supply_external_output():
-    results = subprocess.check_output(
-        ["rg", "-l", "bash scripts/ops/gen_artifact_chain_proof_v2\\.sh", ".github", "scripts"],
-        cwd=ROOT, text=True,
-    ).splitlines()
-    for relative in results:
-        if relative.endswith("gen_artifact_chain_proof_v2.sh"):
+    needle = b"bash scripts/ops/gen_artifact_chain_proof_v2.sh"
+    results: list[Path] = []
+    for base in (ROOT / ".github", ROOT / "scripts"):
+        for path in sorted(base.rglob("*")):
+            if path.is_symlink() or not path.is_file():
+                continue
+            try:
+                raw = path.read_bytes()
+            except OSError:
+                pytest.fail("CALL_SITE_INVENTORY_UNREADABLE")
+            if needle in raw:
+                results.append(path)
+    assert results
+    for path in results:
+        if path == GENERATOR:
             continue
-        source = (ROOT / relative).read_text(encoding="utf-8")
+        source = path.read_text(encoding="utf-8")
         assert "--output" in source
         assert "AC25_EVIDENCE_ROOT" in source

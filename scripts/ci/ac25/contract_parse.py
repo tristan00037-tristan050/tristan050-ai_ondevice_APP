@@ -34,7 +34,10 @@ _FIXED_META_KEYS = frozenset(
 _META_KEY_RE = re.compile(r"\A[A-Z][A-Z0-9_]{0,70}_SKIPPED\Z")
 _BLOCK_LINE_RE = re.compile(r"\ABLOCK: [A-Za-z0-9 ._:/()<>=-]{1,180}\Z")
 _FAIL_LINE_RE = re.compile(r"\AFAIL: [A-Za-z0-9 ._:/()<>=-]{1,180}\Z")
-_BANNER_LINE_RE = re.compile(r"\A== guard: [A-Za-z0-9 ,._:/()+-]{1,180} ==\Z")
+# Banners are bounded meta-only labels, not inventory.  Existing canonical
+# labels contain `~`, comparison operators, and Korean text; forbid controls
+# while preserving those exact UTF-8 lines and their order.
+_BANNER_LINE_RE = re.compile(r"\A== guard: [^\x00-\x1f\x7f]{1,180} ==\Z")
 _SKIP_LINE_RE = re.compile(r"\ASKIP: [A-Za-z0-9 ,._:/()=+-]{1,180}\Z")
 _BLOCK_LINE_LIMIT = 8
 _PRIMARY_VALUE_RE = re.compile(r"\A[A-Za-z0-9 ._:/()\-]+\Z")
