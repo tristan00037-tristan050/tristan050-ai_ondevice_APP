@@ -1,0 +1,3 @@
+self-hosted-runner:
+  labels:
+    - helper1-quality

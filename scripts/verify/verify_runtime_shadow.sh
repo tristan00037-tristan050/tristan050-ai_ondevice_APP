@@ -7,6 +7,7 @@ RUNTIME_SHADOW_ENDPOINT_OK=0
 RUNTIME_SHADOW_HEADERS_OK=0
 BFF_SHADOW_FIREFORGET_OK=0
 RUNTIME_SHADOW_PROOF_OK=0
+RUNTIME_SHADOW_PROOF_SKIPPED=0
 
 # 임시 파일 경로 (mktemp로 분리, 병렬 오염 방지)
 OUT_RUNTIME=""
@@ -33,11 +34,15 @@ cleanup(){
   [[ -n "$RUNTIME_PID" ]] && kill "$RUNTIME_PID" >/dev/null 2>&1 || true
   [[ -n "$BFF_OFF_PID" ]] && kill "$BFF_OFF_PID" >/dev/null 2>&1 || true
   [[ -n "$BFF_ON_PID" ]] && kill "$BFF_ON_PID" >/dev/null 2>&1 || true
+  [[ -n "$RUNTIME_PID" ]] && wait "$RUNTIME_PID" >/dev/null 2>&1 || true
+  [[ -n "$BFF_OFF_PID" ]] && wait "$BFF_OFF_PID" >/dev/null 2>&1 || true
+  [[ -n "$BFF_ON_PID" ]] && wait "$BFF_ON_PID" >/dev/null 2>&1 || true
   
   echo "RUNTIME_SHADOW_ENDPOINT_OK=${RUNTIME_SHADOW_ENDPOINT_OK}"
   echo "RUNTIME_SHADOW_HEADERS_OK=${RUNTIME_SHADOW_HEADERS_OK}"
   echo "BFF_SHADOW_FIREFORGET_OK=${BFF_SHADOW_FIREFORGET_OK}"
   echo "RUNTIME_SHADOW_PROOF_OK=${RUNTIME_SHADOW_PROOF_OK}"
+  echo "RUNTIME_SHADOW_PROOF_SKIPPED=${RUNTIME_SHADOW_PROOF_SKIPPED}"
   if [[ "${RUNTIME_SHADOW_ENDPOINT_OK}" == "1" ]] && \
      [[ "${RUNTIME_SHADOW_HEADERS_OK}" == "1" ]] && \
      [[ "${BFF_SHADOW_FIREFORGET_OK}" == "1" ]] && \
@@ -54,9 +59,9 @@ cd "$ROOT"
 PKG="webcore_appcore_starter_4_17/packages/butler-runtime"
 test -s "$PKG/src/server.mjs"
 
-command -v node >/dev/null 2>&1 || { echo "BLOCK: node not found"; exit 1; }
-command -v curl >/dev/null 2>&1 || { echo "BLOCK: curl not found"; exit 1; }
-command -v jq >/dev/null 2>&1 || { echo "BLOCK: jq not found"; exit 1; }
+command -v node >/dev/null 2>&1 || { echo "ERROR_CODE=RUNTIME_SHADOW_NODE_MISSING"; exit 1; }
+command -v curl >/dev/null 2>&1 || { echo "ERROR_CODE=RUNTIME_SHADOW_CURL_MISSING"; exit 1; }
+command -v jq >/dev/null 2>&1 || { echo "ERROR_CODE=RUNTIME_SHADOW_JQ_MISSING"; exit 1; }
 
 # 동적 포트 선택 (충돌 방지)
 PORT="$(node -e 'const s=require("net").createServer(); s.listen(0, ()=>{console.log(s.address().port); s.close();});')"
@@ -87,7 +92,7 @@ RESPONSE="$(curl -sS -w "\n%{http_code}" -X POST "http://127.0.0.1:${PORT}/v0/ru
 
 HTTP_CODE="$(echo "$RESPONSE" | tail -n 1)"
 if [[ "$HTTP_CODE" != "204" ]]; then
-  echo "BLOCK: shadow endpoint returned ${HTTP_CODE}, expected 204"
+  echo "ERROR_CODE=RUNTIME_SHADOW_ENDPOINT_STATUS_INVALID"
   exit 1
 fi
 RUNTIME_SHADOW_ENDPOINT_OK=1
@@ -99,47 +104,70 @@ HEADERS="$(curl -sS -D - -X POST "http://127.0.0.1:${PORT}/v0/runtime/shadow" \
   -o /dev/null | grep -i "^x-os-algo-")"
 
 if ! echo "$HEADERS" | grep -qi "x-os-algo-latency-ms"; then
-  echo "BLOCK: missing X-OS-Algo-Latency-Ms header"
+  echo "ERROR_CODE=RUNTIME_SHADOW_LATENCY_HEADER_MISSING"
   exit 1
 fi
 
 if ! echo "$HEADERS" | grep -qi "x-os-algo-manifest-sha256"; then
-  echo "BLOCK: missing X-OS-Algo-Manifest-SHA256 header"
+  echo "ERROR_CODE=RUNTIME_SHADOW_MANIFEST_HEADER_MISSING"
   exit 1
 fi
 RUNTIME_SHADOW_HEADERS_OK=1
 
 kill "$RUNTIME_PID" >/dev/null 2>&1 || true
+wait "$RUNTIME_PID" >/dev/null 2>&1 || true
+RUNTIME_PID=""
 
 # 3) BFF shadow fire-and-forget integration check
 BFF_ROUTE="webcore_appcore_starter_4_17/packages/bff-accounting/src/routes/os-algo-core.ts"
 if ! grep -q "fireShadowRequest" "$BFF_ROUTE"; then
-  echo "BLOCK: fireShadowRequest not found in BFF route"
+  echo "ERROR_CODE=RUNTIME_SHADOW_BFF_WIRING_MISSING"
   exit 1
 fi
 
 if ! grep -q "BUTLER_RUNTIME_SHADOW_ENABLED" "$BFF_ROUTE"; then
-  echo "BLOCK: BUTLER_RUNTIME_SHADOW_ENABLED not found in BFF route"
+  echo "ERROR_CODE=RUNTIME_SHADOW_FLAG_WIRING_MISSING"
   exit 1
 fi
 
 # 4) HTTPS protocol support check (static verification)
 if ! grep -q "fetch" "$BFF_ROUTE"; then
-  echo "BLOCK: fetch not found in shadow request (https support required)"
+  echo "ERROR_CODE=RUNTIME_SHADOW_FETCH_WIRING_MISSING"
   exit 1
 fi
 
 # Verify URL constructor handles both http:// and https://
 if ! grep -q "new URL" "$BFF_ROUTE"; then
-  echo "BLOCK: URL constructor not found (protocol detection required)"
+  echo "ERROR_CODE=RUNTIME_SHADOW_URL_WIRING_MISSING"
   exit 1
 fi
 BFF_SHADOW_FIREFORGET_OK=1
 
 # 4) Proof generation (OFF/ON response identity)
-# Skip proof generation if dist doesn't exist (CI may not pre-build for verify-only runs)
-PROOF_DIR="docs/ops/PROOFS"
-mkdir -p "$PROOF_DIR"
+# The proof is always routed outside the repository.  In AC25 mode the caller
+# supplies a pre-existing private evidence root; other verification runs get a
+# private ephemeral root.
+EVIDENCE_ROOT="${AC25_EVIDENCE_ROOT:-}"
+PROOF_DIR="${RUNTIME_SHADOW_PROOF_ROOT:-}"
+if [[ -z "$EVIDENCE_ROOT" ]]; then
+  if [[ -n "$PROOF_DIR" ]]; then
+    EVIDENCE_ROOT="$PROOF_DIR"
+  elif [[ -n "${RUNNER_TEMP:-}" ]]; then
+    install -d -m 0700 -- "$RUNNER_TEMP"
+    EVIDENCE_ROOT="$(mktemp -d "$RUNNER_TEMP/runtime-shadow-v46.XXXXXX")"
+  else
+    EVIDENCE_ROOT="$(mktemp -d)"
+  fi
+fi
+[[ -d "$EVIDENCE_ROOT" ]] || { echo "ERROR_CODE=OUTPUT_PATH_UNSAFE_TYPE"; exit 1; }
+[[ "$(python3 -S -c 'import os,stat,sys; print(oct(stat.S_IMODE(os.lstat(sys.argv[1]).st_mode))[2:])' "$EVIDENCE_ROOT")" == "700" ]] \
+  || { echo "ERROR_CODE=OUTPUT_ROOT_MODE_INVALID"; exit 1; }
+if [[ -z "$PROOF_DIR" ]]; then
+  PROOF_DIR="$EVIDENCE_ROOT/runtime-shadow"
+fi
+install -d -m 0700 -- "$PROOF_DIR"
+EVIDENCE_ROOT="$(cd "$EVIDENCE_ROOT" && pwd -P)"
+PROOF_DIR="$(cd "$PROOF_DIR" && pwd -P)"
 
 # Start BFF in dev mode (shadow OFF)
 cd webcore_appcore_starter_4_17/packages/bff-accounting
@@ -156,7 +184,7 @@ export ALGO_CORE_MODE=dev
 
 # Skip proof generation if dist doesn't exist or build_info.json is missing (CI may not pre-build)
 if [[ ! -d "dist" ]] || [[ ! -f "dist/build_info.json" ]]; then
-  echo "SKIP: dist directory or build_info.json not found, skipping proof generation (CI may not pre-build)"
+  RUNTIME_SHADOW_PROOF_SKIPPED=1
   RUNTIME_SHADOW_PROOF_OK=1
   exit 0
 fi
@@ -185,30 +213,30 @@ done
 
 # Verify BFF is actually running
 if ! curl -sS "http://127.0.0.1:${BFF_PORT}/healthz" >/dev/null 2>&1; then
-  echo "BLOCK: BFF server failed to start"
-  echo "BFF logs:"
-  cat "$OUT_BFF_OFF" 2>&1 || true
+  echo "ERROR_CODE=RUNTIME_SHADOW_BFF_OFF_START_FAILED"
   exit 1
 fi
 
 # Call with shadow OFF
+PROOF_REQUEST_JSON='{"request_id":"proof_test","intent":"ALGO_CORE_THREE_BLOCKS","model_id":"demoA","device_class":"web","client_version":"test","ts_utc":"2026-01-29T00:00:00Z"}'
 RESPONSE_OFF="$(curl -sS -D "$HDR_OFF" -X POST "http://127.0.0.1:${BFF_PORT}/v1/os/algo/three-blocks" \
   -H "Content-Type: application/json" \
   -H "X-Api-Key: dev-key:operator" \
   -H "X-Tenant: default" \
   -H "X-User-Id: test-user" \
   -H "X-User-Role: operator" \
-  --data '{"request_id":"proof_test","intent":"ALGO_CORE_THREE_BLOCKS","model_id":"demoA","device_class":"web","client_version":"test","ts_utc":"2026-01-29T00:00:00Z"}')"
+  --data "$PROOF_REQUEST_JSON")"
 
 # Check if response is OK (if error, headers may not be set)
 HTTP_CODE_OFF="$(grep -i "^HTTP" "$HDR_OFF" | tail -1 | awk '{print $2}' || echo "")"
 if [[ "$HTTP_CODE_OFF" != "200" ]]; then
-  echo "BLOCK: BFF returned ${HTTP_CODE_OFF} (expected 200)"
-  echo "Response: $RESPONSE_OFF"
+  echo "ERROR_CODE=RUNTIME_SHADOW_BFF_OFF_STATUS_INVALID"
   exit 1
 fi
 
 kill "$BFF_OFF_PID" >/dev/null 2>&1 || true
+wait "$BFF_OFF_PID" >/dev/null 2>&1 || true
+BFF_OFF_PID=""
 sleep 1
 
 # Start BFF with shadow ON
@@ -224,9 +252,7 @@ done
 
 # Verify BFF is actually running
 if ! curl -sS "http://127.0.0.1:${BFF_PORT}/healthz" >/dev/null 2>&1; then
-  echo "BLOCK: BFF server (shadow ON) failed to start"
-  echo "BFF logs:"
-  cat "$OUT_BFF_ON" 2>&1 || true
+  echo "ERROR_CODE=RUNTIME_SHADOW_BFF_ON_START_FAILED"
   exit 1
 fi
 
@@ -237,27 +263,28 @@ RESPONSE_ON="$(curl -sS -D "$HDR_ON" -X POST "http://127.0.0.1:${BFF_PORT}/v1/os
   -H "X-Tenant: default" \
   -H "X-User-Id: test-user" \
   -H "X-User-Role: operator" \
-  --data '{"request_id":"proof_test","intent":"ALGO_CORE_THREE_BLOCKS","model_id":"demoA","device_class":"web","client_version":"test","ts_utc":"2026-01-29T00:00:00Z"}')"
+  --data "$PROOF_REQUEST_JSON")"
 
 # Check if response is OK (if error, headers may not be set)
 HTTP_CODE_ON="$(grep -i "^HTTP" "$HDR_ON" | tail -1 | awk '{print $2}' || echo "")"
 if [[ "$HTTP_CODE_ON" != "200" ]]; then
-  echo "BLOCK: BFF (shadow ON) returned ${HTTP_CODE_ON} (expected 200)"
-  echo "Response: $RESPONSE_ON"
+  echo "ERROR_CODE=RUNTIME_SHADOW_BFF_ON_STATUS_INVALID"
   exit 1
 fi
 
 kill "$BFF_ON_PID" >/dev/null 2>&1 || true
 kill "$RUNTIME_PID" >/dev/null 2>&1 || true
+wait "$BFF_ON_PID" >/dev/null 2>&1 || true
+wait "$RUNTIME_PID" >/dev/null 2>&1 || true
+BFF_ON_PID=""
+RUNTIME_PID=""
 
 # Compare responses (blocks must be identical; manifest/signature may differ due to timestamps)
 BLOCKS_OFF="$(echo "$RESPONSE_OFF" | jq -c '.blocks' 2>/dev/null || echo "")"
 BLOCKS_ON="$(echo "$RESPONSE_ON" | jq -c '.blocks' 2>/dev/null || echo "")"
 
 if [[ "$BLOCKS_OFF" != "$BLOCKS_ON" ]]; then
-  echo "BLOCK: response blocks differ (shadow OFF vs ON)"
-  echo "OFF: $BLOCKS_OFF"
-  echo "ON: $BLOCKS_ON"
+  echo "ERROR_CODE=RUNTIME_SHADOW_BLOCKS_MISMATCH"
   exit 1
 fi
 
@@ -266,7 +293,7 @@ OK_OFF="$(echo "$RESPONSE_OFF" | jq -c '.ok' 2>/dev/null || echo "")"
 OK_ON="$(echo "$RESPONSE_ON" | jq -c '.ok' 2>/dev/null || echo "")"
 
 if [[ "$OK_OFF" != "$OK_ON" ]]; then
-  echo "BLOCK: ok field differs (shadow OFF vs ON)"
+  echo "ERROR_CODE=RUNTIME_SHADOW_OK_FIELD_MISMATCH"
   exit 1
 fi
 
@@ -275,7 +302,7 @@ HEADER_OFF_LATENCY="$(grep -i "^x-os-algo-latency-ms" "$HDR_OFF" | head -1 || ec
 HEADER_ON_LATENCY="$(grep -i "^x-os-algo-latency-ms" "$HDR_ON" | head -1 || echo "")"
 
 if [[ -z "$HEADER_OFF_LATENCY" ]] || [[ -z "$HEADER_ON_LATENCY" ]]; then
-  echo "BLOCK: X-OS-Algo-Latency-Ms header missing"
+  echo "ERROR_CODE=RUNTIME_SHADOW_LATENCY_HEADER_MISSING"
   exit 1
 fi
 
@@ -283,16 +310,24 @@ HEADER_OFF_SHA="$(grep -i "^x-os-algo-manifest-sha256" "$HDR_OFF" | head -1 || e
 HEADER_ON_SHA="$(grep -i "^x-os-algo-manifest-sha256" "$HDR_ON" | head -1 || echo "")"
 
 if [[ -z "$HEADER_OFF_SHA" ]] || [[ -z "$HEADER_ON_SHA" ]]; then
-  echo "BLOCK: X-OS-Algo-Manifest-SHA256 header missing"
+  echo "ERROR_CODE=RUNTIME_SHADOW_MANIFEST_HEADER_MISSING"
   exit 1
 fi
 
-# Generate proof document
+# Generate proof document through the descriptor-anchored external writer.
 cd "$ROOT"
 TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 SHA="$(git rev-parse HEAD)"
+REQUEST_SHA256="$(printf '%s' "$PROOF_REQUEST_JSON" | shasum -a 256 | awk '{print $1}')"
+BLOCKS_SHA256="$(printf '%s' "$BLOCKS_OFF" | shasum -a 256 | awk '{print $1}')"
+RESPONSE_OFF_SHA256="$(printf '%s' "$RESPONSE_OFF" | shasum -a 256 | awk '{print $1}')"
+RESPONSE_ON_SHA256="$(printf '%s' "$RESPONSE_ON" | shasum -a 256 | awk '{print $1}')"
 
-cat > "$PROOF_DIR/2026-01-29_runtime_shadow.md" <<EOF
+cat <<EOF | python3 scripts/ops/external_atomic_io.py \
+  --repo-root "$ROOT" \
+  --evidence-root "$EVIDENCE_ROOT" \
+  --output "$PROOF_DIR/2026-01-29_runtime_shadow.md" \
+  --max-payload-bytes 1048576
 # Runtime Shadow Mode Proof (Output-Based)
 
 Status: SEALED
@@ -301,49 +336,17 @@ PinnedMainHeadSHA: ${SHA}
 
 ## Test: Shadow OFF vs ON Response Identity
 
-### Request
-\`\`\`json
-{
-  "request_id": "proof_test",
-  "intent": "ALGO_CORE_THREE_BLOCKS",
-  "model_id": "demoA",
-  "device_class": "web",
-  "client_version": "test",
-  "ts_utc": "2026-01-29T00:00:00Z"
-}
-\`\`\`
-
-### Response Blocks (OFF)
-\`\`\`json
-${BLOCKS_OFF}
-\`\`\`
-
-### Response Blocks (ON)
-\`\`\`json
-${BLOCKS_ON}
-\`\`\`
-
-### Full Response (OFF)
-\`\`\`json
-$(echo "$RESPONSE_OFF" | jq . 2>/dev/null || echo "$RESPONSE_OFF")
-\`\`\`
-
-### Full Response (ON)
-\`\`\`json
-$(echo "$RESPONSE_ON" | jq . 2>/dev/null || echo "$RESPONSE_ON")
-\`\`\`
-
-### Critical Headers (OFF)
-\`\`\`
-${HEADER_OFF_LATENCY}
-${HEADER_OFF_SHA}
-\`\`\`
-
-### Critical Headers (ON)
-\`\`\`
-${HEADER_ON_LATENCY}
-${HEADER_ON_SHA}
-\`\`\`
+RequestSHA256: ${REQUEST_SHA256}
+RequestBytes: ${#PROOF_REQUEST_JSON}
+ResponseBlocksSHA256: ${BLOCKS_SHA256}
+ResponseBlocksBytes: ${#BLOCKS_OFF}
+ResponseOffSHA256: ${RESPONSE_OFF_SHA256}
+ResponseOffBytes: ${#RESPONSE_OFF}
+ResponseOnSHA256: ${RESPONSE_ON_SHA256}
+ResponseOnBytes: ${#RESPONSE_ON}
+RawRequestPersisted: NO
+RawResponsePersisted: NO
+RawHeadersPersisted: NO
 
 ## Output-Based Checks
 
