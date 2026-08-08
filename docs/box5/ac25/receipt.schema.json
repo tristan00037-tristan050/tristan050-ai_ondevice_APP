@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/contracts/ac25-r6-close-receipt-v2.schema.json",
+  "title": "Butler AC-25 R6 Close Receipt v2",
+  "$defs": {
+    "oid": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "decimalId": {"type": "string", "pattern": "^[1-9][0-9]*$"},
+    "time": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]Z$"
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": "butler.ac25.r6_close_receipt.v2"},
+    "repository": {"const": "tristan00037-tristan050/tristan050-ai_ondevice_APP"},
+    "pr_number": {"const": 904},
+    "start_head_sha": {"$ref": "#/$defs/oid"},
+    "start_head_tree": {"$ref": "#/$defs/oid"},
+    "target_head_sha": {"$ref": "#/$defs/oid"},
+    "target_head_tree": {"$ref": "#/$defs/oid"},
+    "pr_base_sha_observed": {"$ref": "#/$defs/oid"},
+    "workflow_id": {"type": "integer", "minimum": 1},
+    "workflow_path": {"const": ".github/workflows/box5-ac25-stage-a-smoke.yml"},
+    "workflow_blob_oid": {"$ref": "#/$defs/oid"},
+    "run_id": {"$ref": "#/$defs/decimalId"},
+    "run_attempt": {"$ref": "#/$defs/decimalId"},
+    "exact_head_job_id": {"$ref": "#/$defs/decimalId"},
+    "run_started_at": {"$ref": "#/$defs/time"},
+    "run_completed_at": {"$ref": "#/$defs/time"},
+    "receipt_issued_at": {"$ref": "#/$defs/time"},
+    "command_plan_sha256": {"$ref": "#/$defs/sha256"},
+    "expected_guard_inventory_sha256": {"$ref": "#/$defs/sha256"},
+    "contract_evidence_sha256": {"$ref": "#/$defs/sha256"},
+    "clean_check_sha256": {"$ref": "#/$defs/sha256"},
+    "changed_path_manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "junit_manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "tap_manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "required_checks_sha256": {"$ref": "#/$defs/sha256"},
+    "observed_checks_sha256": {"$ref": "#/$defs/sha256"},
+    "provenance_sha256": {"$ref": "#/$defs/sha256"},
+    "erratum_2_sha256": {"const": "2ed584f139227a454c821729c44586fd628d8f0239b61700fae62cc7d7c185db"}
+  },
+  "required": [
+    "schema_version", "repository", "pr_number", "start_head_sha",
+    "start_head_tree", "target_head_sha", "target_head_tree",
+    "pr_base_sha_observed", "workflow_id", "workflow_path",
+    "workflow_blob_oid", "run_id", "run_attempt", "exact_head_job_id",
+    "run_started_at", "run_completed_at", "receipt_issued_at",
+    "command_plan_sha256", "expected_guard_inventory_sha256",
+    "contract_evidence_sha256", "clean_check_sha256",
+    "changed_path_manifest_sha256", "junit_manifest_sha256",
+    "tap_manifest_sha256", "required_checks_sha256",
+    "observed_checks_sha256", "provenance_sha256", "erratum_2_sha256"
+  ]
+}

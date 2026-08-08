@@ -1,0 +1,762 @@
+"""§E6-1 원격 사실 재확인.
+
+자체 꾸러미 안의 값만 대조하는 것은 내부 정합성 확인일 뿐이다. 검증기는 아래를
+GitHub API 로 그 자리에서 다시 읽는다.
+
+    PR 의 head sha·head tree·base sha
+    보호 ref 가 지금 가리키는 커밋(★조상 판정의 기준으로 고정한다)
+    승인 커밋이 그 보호 ref 의 ★조상인지
+    승인 커밋의 committer 시각
+    승인 문서·서명·allowed_signers 의 원문 바이트
+    workflow run 의 시작 시각
+    승인자 login 의 실제 계정 ID
+
+읽지 못하면 통과시키지 않는다. 판정 경로에 assert 를 쓰지 않는다(§E6-2).
+
+전송 계층은 주입받는다(시험이 네트워크 없이 돌 수 있어야 하므로). 다만
+★무엇을 읽을지는 이 모듈이 정한다. 부르는 쪽이 값을 직접 넣지 못한다.
+
+★조상 판정 (정오표 후속 교정)
+  이전 판은 `commits?sha=<commit>` 목록이 비지 않는지로 도달 가능을 근사했다.
+  그 조회는 "그 커밋에서 시작한 이력"을 돌려줄 뿐이라, 저장소에 존재하기만 하면
+  어떤 커밋이든 통과한다. 보호 ref 의 조상임을 전혀 증명하지 못한다.
+  근사 검사는 삭제했고, compare API 의 조상 관계 판정으로 대체했다.
+      compare/{protected_head}...{commit}  →  status in {behind, identical}
+  목록 응답을 조상 근거로 쓰는 경로는 남아 있지 않다(pagination 무관).
+"""
+from __future__ import annotations
+
+import base64
+import binascii
+import json
+import re
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Mapping, Protocol
+from pathlib import Path
+from urllib.parse import quote
+
+from . import gh_transport_policy, output_containment
+from .cross_track_approval import RemoteFacts
+
+# ── 실패 코드 ──────────────────────────────────────────────────────────
+REMOTE_FACT_UNAVAILABLE = "REMOTE_FACT_UNAVAILABLE"
+REMOTE_FACT_NOT_FOUND = "REMOTE_FACT_NOT_FOUND"
+REMOTE_FACT_FORBIDDEN = "REMOTE_FACT_FORBIDDEN"
+REMOTE_FACT_RATE_LIMITED = "REMOTE_FACT_RATE_LIMITED"
+REMOTE_FACT_MALFORMED = "REMOTE_FACT_MALFORMED"
+
+_OID_RE = re.compile(r"^[0-9a-f]{40}$")
+_STATUS_LINE_RE = re.compile(r"^HTTP/[0-9.]+\s+(\d{3})")
+
+# compare API 에서 head 가 base 의 조상임을 뜻하는 상태
+_ANCESTOR_STATES = frozenset({"behind", "identical"})
+
+
+@dataclass(frozen=True)
+class TransportResult:
+    """HTTP 한 건의 결과. 상태 코드를 구분해야 404·403·rate-limit 을 나눌 수 있다."""
+    status: int
+    payload: dict | list | None = None
+    headers: Mapping[str, str] = field(default_factory=dict)
+    message: str = ""
+
+
+class Transport(Protocol):
+    """GitHub REST 한 건을 읽는다."""
+
+    def __call__(self, path: str) -> TransportResult: ...
+
+
+# ══ §14 C5 — token 경로 분리 ═══════════════════════════════════════════
+TOKEN_ROUTE_VIOLATION = "TOKEN_ROUTE_VIOLATION"
+
+
+class Route(str, Enum):
+    """어느 credential 로 부를지. 섞으면 한쪽 열쇠로 다른 쪽 문을 여는 길이 열린다."""
+
+    APPROVAL = "approval"
+    CANDIDATE = "candidate"
+    RUN = "run"
+
+
+@dataclass(frozen=True)
+class TransportRouter:
+    """세 credential 을 분리해 들고 있는다."""
+
+    approval: Transport
+    candidate: Transport
+    run: Transport
+
+    def transport_for(self, route: Route) -> Transport:
+        if route is Route.APPROVAL:
+            return self.approval
+        if route is Route.CANDIDATE:
+            return self.candidate
+        if route is Route.RUN:
+            return self.run
+        raise ValueError(TOKEN_ROUTE_VIOLATION)
+
+
+@dataclass(frozen=True)
+class EndpointBuilder:
+    """★production 과 preflight 가 ★같은★ endpoint 집합을 쓰게 하는 단일 출처.
+
+    preflight 가 목록을 손으로 복제하면 production 호출망을 보장하지 못한다.
+    """
+
+    approval_repository: str
+    approval_protected_ref: str
+    approval_commit_sha: str
+    document_path: str
+    signature_path: str
+    allowed_signers_path: str
+    approver_login: str
+    candidate_repository: str
+    pr_number: int
+    candidate_head_sha: str
+    run_repository: str
+    run_id: int
+    environment_name: str
+
+    # ── approval route ────────────────────────────────────────────────
+    def approval_repo(self) -> str:
+        return f"repos/{self.approval_repository}"
+
+    def approval_ref(self) -> str:
+        short = self.approval_protected_ref.removeprefix("refs/")
+        return f"repos/{self.approval_repository}/git/ref/{short}"
+
+    def approval_commit(self) -> str:
+        return f"repos/{self.approval_repository}/commits/{self.approval_commit_sha}"
+
+    def approval_compare(self, protected_head: str) -> str:
+        return (
+            f"repos/{self.approval_repository}/compare/"
+            f"{protected_head}...{self.approval_commit_sha}"
+        )
+
+    def approval_contents(self, path: str) -> str:
+        return (
+            f"repos/{self.approval_repository}/contents/{_encode_path(path)}"
+            f"?ref={self.approval_commit_sha}"
+        )
+
+    def approver(self) -> str:
+        return f"users/{quote(self.approver_login, safe='')}"
+
+    # ── candidate route ───────────────────────────────────────────────
+    def candidate_pull(self) -> str:
+        return f"repos/{self.candidate_repository}/pulls/{self.pr_number}"
+
+    def candidate_commit(self, sha: str) -> str:
+        return f"repos/{self.candidate_repository}/git/commits/{sha}"
+
+    def candidate_repo(self) -> str:
+        return f"repos/{self.candidate_repository}"
+
+    def candidate_branch(self, branch: str) -> str:
+        return f"repos/{self.candidate_repository}/branches/{branch}"
+
+    def candidate_environment(self) -> str:
+        return (
+            f"repos/{self.candidate_repository}/environments/"
+            f"{quote(self.environment_name, safe='')}"
+        )
+
+    def candidate_environment_policies(self) -> str:
+        return f"{self.candidate_environment()}/deployment-branch-policies"
+
+    # ── run route ─────────────────────────────────────────────────────
+    def run_facts(self) -> str:
+        return f"repos/{self.run_repository}/actions/runs/{self.run_id}"
+
+    def static_requests(self) -> tuple[tuple[Route, str], ...]:
+        """★R6-3 §6-2 S1 — 선행 의존이 ★없는★ read 만. 자리표를 쓰지 않는다.
+
+        이전 판의 `canonical_requests()` 는 실행 전에 모든 URL 을 평평하게 만들어
+        `approval_compare("0" * 40)` 같은 all-zero 자리표를 주소에 넣었다. 그
+        목록은 폐기했다. 의존이 있는 요청은 token_preflight 상태기계가 앞 응답의
+        실측 값으로 그때 만든다.
+        """
+        return (
+            (Route.APPROVAL, self.approval_repo()),
+            (Route.APPROVAL, self.approval_ref()),
+            (Route.APPROVAL, self.approval_commit()),
+            (Route.APPROVAL, self.approval_contents(self.document_path)),
+            (Route.CANDIDATE, self.candidate_pull()),
+            (Route.CANDIDATE, self.candidate_environment()),
+        )
+
+
+def route_for(path: str, *, approval_repository: str, candidate_repository: str) -> Route:
+    """경로만 보고 어느 credential 이어야 하는지 정한다. strict allowlist 다."""
+    if path.startswith("users/"):
+        return Route.APPROVAL
+    if path.startswith(f"repos/{approval_repository}"):
+        return Route.APPROVAL
+    if path.startswith(f"repos/{candidate_repository}/actions/"):
+        return Route.RUN
+    if path.startswith(f"repos/{candidate_repository}"):
+        return Route.CANDIDATE
+    raise ValueError(TOKEN_ROUTE_VIOLATION)
+
+
+@dataclass(frozen=True)
+class RemoteFactError:
+    code: str
+    message: str
+    expected: str | None = None
+    observed: str | None = None
+
+
+@dataclass(frozen=True)
+class RemoteObservation:
+    """원격에서 실측한 사실 일체."""
+    facts: RemoteFacts
+    protected_ref_head: str      # ★조상 판정의 기준으로 고정한 커밋
+    observed_repository: str     # repos/{r} 응답의 full_name
+    observed_protected_ref: str  # git/ref/... 응답의 ref
+    observed_document_path: str  # contents 응답의 path
+    candidate_head_sha: str
+    candidate_head_tree: str
+    candidate_base_sha: str
+
+
+APPROVAL_TOKEN_ENV = "AC25_APPROVAL_TOKEN"
+CANDIDATE_TOKEN_ENV = "AC25_CANDIDATE_TOKEN"
+
+
+def gh_transport_for(token_env_name: str) -> Transport:
+    """★해당 env 의 token 으로만 부르는 전송을 만든다(C5 · F-03).
+
+    secret 은 argv 에 넣지 않는다. 자식 env 로만 넘긴다.
+
+    ★F-03 — host 와 자격 출처를 전송 계층에서 강제한다.
+      · argv 에 `--hostname github.com` 을 명시한다(gh 는 ★GitHub 호스트★ 를 받는다)
+      · 자식 환경은 allowlist 로 새로 만든다(os.environ 을 물려주지 않는다)
+      · 격리된 빈 GH_CONFIG_DIR 을 준다
+      · token 이 비어 있으면 요청 전에 닫는다(익명 호출 방지)
+    """
+
+    def send(path: str) -> TransportResult:
+        import os as _os
+        import shutil as _shutil
+
+        # ★v2.0 §3-2 — 요청을 보내기 전에 ★두 토큰을 함께★ 본다.
+        #   한쪽만 있어도 승인 저장소 요청부터 나가던 자리다. 이제 아무것도 안 나간다.
+        try:
+            gh_transport_policy.require_token_pair(
+                approval_env=APPROVAL_TOKEN_ENV, candidate_env=CANDIDATE_TOKEN_ENV
+            )
+        except gh_transport_policy.TransportPolicyError as exc:
+            return TransportResult(status=0, message=exc.code)
+
+        token = _os.environ.get(token_env_name, "")
+        try:
+            config_dir = gh_transport_policy.isolated_config_dir(
+                output_containment.default_runner_temp()
+            )
+        except OSError:
+            return TransportResult(
+                status=0, message=gh_transport_policy.TRANSPORT_CONFIG_NOT_ISOLATED
+            )
+        try:
+            transport_env = gh_transport_policy.build_transport_environment(
+                token=token, config_dir=config_dir
+            )
+            argv = transport_env.argv(path)
+            gh_transport_policy.require_hostname_pinned(argv)
+            return _gh_call(argv, env=transport_env.env)
+        except gh_transport_policy.TransportPolicyError as exc:
+            # ★정책 위반은 요청을 보내기 전에 닫는다. 코드만 남긴다.
+            return TransportResult(status=0, message=exc.code)
+        finally:
+            _shutil.rmtree(config_dir, ignore_errors=True)
+
+    return send
+
+
+def _gh_call(argv: list[str], *, env) -> TransportResult:
+    """gh CLI 로 읽는다. 응답 헤더까지 받아 상태를 구분한다."""
+    try:
+        _code, out, _err = output_containment.run_and_read(
+            argv, cwd=Path.cwd(), env=env
+        )
+    except output_containment.ContainmentError as exc:
+        # ★gh stderr·body·header 를 message 에 넣지 않는다. 고정 코드만.
+        return TransportResult(status=0, message=exc.code)
+
+    raw = out.decode("utf-8", "replace").replace("\r\n", "\n")
+    head, separator, body = raw.partition("\n\n")
+    if not separator:  # 헤더/본문 경계를 찾지 못함
+        head, body = "", raw
+
+    status = 0
+    headers: dict[str, str] = {}
+    for index, line in enumerate(head.splitlines()):
+        if index == 0:
+            match = _STATUS_LINE_RE.match(line.strip())
+            if match is not None:
+                status = int(match.group(1))
+            continue
+        name, sep, value = line.partition(":")
+        if sep:
+            headers[name.strip().lower()] = value.strip()
+
+    if status == 0:
+        return TransportResult(
+            status=0, headers=headers, message="TRANSPORT_STATUS_UNREADABLE"
+        )
+
+    payload: dict | list | None = None
+    stripped = body.strip()
+    if stripped:
+        try:
+            payload = json.loads(stripped)
+        except json.JSONDecodeError:
+            return TransportResult(
+                status=status, headers=headers, message="TRANSPORT_BODY_NOT_JSON"
+            )
+    return TransportResult(status=status, payload=payload, headers=headers)
+
+
+def classify(result: TransportResult) -> str | None:
+    """전송 결과를 실패 코드로 분류한다. 정상이면 None."""
+    if result.status == 404:
+        return REMOTE_FACT_NOT_FOUND
+    remaining = str(result.headers.get("x-ratelimit-remaining", "")).strip()
+    if result.status == 429 or (result.status == 403 and remaining == "0"):
+        return REMOTE_FACT_RATE_LIMITED
+    if result.status == 403:
+        return REMOTE_FACT_FORBIDDEN
+    if result.status < 200 or result.status >= 300:
+        return REMOTE_FACT_UNAVAILABLE
+    if result.payload is None:
+        return REMOTE_FACT_MALFORMED
+    return None
+
+
+class _Reader:
+    """전송 결과를 분류하며 읽고, 실패를 증거로 모은다.
+
+    ★router 를 받으면 경로마다 알맞은 credential 을 고른다. 잘못된 경로가 오면
+      호출하지 않고 TOKEN_ROUTE_VIOLATION 으로 닫는다(C5).
+    """
+
+    def __init__(
+        self,
+        transport: Transport | None = None,
+        *,
+        router: "TransportRouter | None" = None,
+        approval_repository: str = "",
+        candidate_repository: str = "",
+    ) -> None:
+        self._transport = transport
+        self._router = router
+        self._approval_repository = approval_repository
+        self._candidate_repository = candidate_repository
+        self.used_routes: list[tuple[str, str]] = []
+        self.errors: list[RemoteFactError] = []
+
+    def _send(self, path: str) -> TransportResult:
+        if self._router is None:
+            return self._transport(path)
+        try:
+            route = route_for(
+                path,
+                approval_repository=self._approval_repository,
+                candidate_repository=self._candidate_repository,
+            )
+        except ValueError:
+            self.fail(
+                TOKEN_ROUTE_VIOLATION, "허용되지 않은 endpoint",
+                expected="approval·candidate·run 중 하나", observed="route 없음",
+            )
+            return TransportResult(status=0, message=TOKEN_ROUTE_VIOLATION)
+        self.used_routes.append((route.value, path))
+        return self._router.transport_for(route)(path)
+
+    def object(self, path: str, label: str) -> dict | None:
+        result = self._send(path)
+        code = classify(result)
+        if code is not None:
+            self.errors.append(
+                RemoteFactError(
+                    code, f"{label} 을(를) 읽지 못했다",
+                    expected=path,
+                    observed=f"status={result.status} {result.message}".strip(),
+                )
+            )
+            return None
+        if not isinstance(result.payload, dict):
+            # 목록 응답을 객체로 받아 쓰지 않는다(pagination 오해 차단)
+            self.errors.append(
+                RemoteFactError(
+                    REMOTE_FACT_MALFORMED, f"{label} 응답이 객체가 아니다",
+                    expected="JSON 객체",
+                    observed=type(result.payload).__name__,
+                )
+            )
+            return None
+        return result.payload
+
+    def fail(self, code: str, message: str, expected: str, observed: str) -> None:
+        self.errors.append(RemoteFactError(code, message, expected=expected, observed=observed))
+
+
+def _to_utc_second(value: object) -> str | None:
+    """GitHub 시각(…Z 또는 +09:00)을 초 단위 UTC 문자열로 정규화한다."""
+    if not isinstance(value, str) or not value:
+        return None
+    from datetime import datetime, timezone
+
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _decode_content(payload: object) -> bytes | None:
+    if not isinstance(payload, dict):
+        return None
+    if payload.get("encoding") not in (None, "base64"):
+        return None
+    content = payload.get("content")
+    if not isinstance(content, str):
+        return None
+    try:
+        return base64.b64decode(content, validate=False)
+    except (binascii.Error, ValueError):
+        return None
+
+
+def _encode_path(path: str) -> str:
+    return quote(path, safe="/")
+
+
+def is_ancestor(
+    *, transport: Transport, repository: str, ancestor: str, descendant: str
+) -> bool | None:
+    """`ancestor` 가 `descendant` 의 조상인지 compare API 로 판정한다.
+
+    compare/{base}...{head} 의 status 는 head 가 base 에 대해 갖는 관계다.
+    base=descendant, head=ancestor 로 물으면 behind/identical 이 조상이다.
+    판정할 수 없으면 None(= 통과시키지 않음).
+    """
+    if not _OID_RE.match(ancestor or "") or not _OID_RE.match(descendant or ""):
+        return None
+    result = transport(f"repos/{repository}/compare/{descendant}...{ancestor}")
+    if classify(result) is not None or not isinstance(result.payload, dict):
+        return None
+    state = result.payload.get("status")
+    if not isinstance(state, str):
+        return None
+    return state in _ANCESTOR_STATES
+
+
+def read_candidate_head(
+    *, transport: Transport, repository: str, pr_number: int
+) -> tuple[str | None, str | None, str | None]:
+    """PR 의 head sha·head tree·base sha 를 원격에서 읽는다."""
+    reader = _Reader(transport)
+    pull = reader.object(f"repos/{repository}/pulls/{pr_number}", "PR")
+    if pull is None:
+        return None, None, None
+    head = pull.get("head")
+    base = pull.get("base")
+    sha = head.get("sha") if isinstance(head, dict) else None
+    base_sha = base.get("sha") if isinstance(base, dict) else None
+    if not isinstance(sha, str) or not _OID_RE.match(sha):
+        return None, None, base_sha if isinstance(base_sha, str) else None
+    if not isinstance(base_sha, str) or not _OID_RE.match(base_sha):
+        base_sha = None
+    commit = reader.object(f"repos/{repository}/git/commits/{sha}", "후보 head 커밋")
+    if commit is None:
+        return sha, None, base_sha
+    tree = commit.get("tree")
+    tree_sha = tree.get("sha") if isinstance(tree, dict) else None
+    if not isinstance(tree_sha, str) or not _OID_RE.match(tree_sha):
+        return sha, None, base_sha
+    return sha, tree_sha, base_sha
+
+
+def read_account_id(
+    *, transport: Transport, login: str
+) -> tuple[int | None, tuple[RemoteFactError, ...]]:
+    """login 의 실제 GitHub 계정 ID 를 조회한다. 문서를 읽은 뒤에 부른다."""
+    reader = _Reader(transport)
+    if not login:
+        reader.fail(
+            REMOTE_FACT_MALFORMED, "승인자 login 이 비어 있다",
+            expected="승인 문서의 approver_login", observed="(빈 값)",
+        )
+        return None, tuple(reader.errors)
+    user = reader.object(f"users/{quote(login, safe='')}", "승인자 계정")
+    if user is None:
+        return None, tuple(reader.errors)
+    account_id = user.get("id")
+    if not isinstance(account_id, int) or isinstance(account_id, bool):
+        reader.fail(
+            REMOTE_FACT_MALFORMED, "승인자 계정 ID 를 읽지 못했다",
+            expected=f"users/{login}.id", observed=str(account_id),
+        )
+        return None, tuple(reader.errors)
+    return account_id, tuple(reader.errors)
+
+
+def read_protected_facts(
+    *, router: TransportRouter, repository: str, protected_ref: str, environment_name: str
+):
+    """§6 M-2 — main 보호 상태와 environment 정책을 ★API 응답에서★ 읽는다.
+
+    workflow context 를 베끼지 않는다. 베끼면 대조가 자기증명이 된다.
+    반환값은 workflow_identity.ProtectedFacts 다(순환 import 를 피해 지연 import).
+    """
+    from .workflow_identity import ProtectedFacts
+
+    # 이 셋은 ★후보(현재) 저장소★ 의 read 다. 승인 token 을 쓰지 않는다.
+    reader = _Reader(
+        router=router, approval_repository="", candidate_repository=repository
+    )
+    branch_name = protected_ref.removeprefix("refs/heads/")
+
+    repo_payload = reader.object(f"repos/{repository}", "저장소")
+    full_name = repo_payload.get("full_name") if repo_payload else None
+
+    branch = reader.object(f"repos/{repository}/branches/{branch_name}", "보호 branch")
+    main_head = ""
+    main_protected = False
+    if branch is not None:
+        commit = branch.get("commit")
+        sha = commit.get("sha") if isinstance(commit, dict) else None
+        if isinstance(sha, str) and _OID_RE.match(sha):
+            main_head = sha
+        else:
+            reader.fail(
+                REMOTE_FACT_MALFORMED, "보호 branch 의 head 를 읽지 못했다",
+                expected="40자 Git OID", observed=str(sha),
+            )
+        main_protected = branch.get("protected") is True
+
+    environment = reader.object(
+        f"repos/{repository}/environments/{quote(environment_name, safe='')}",
+        "environment",
+    )
+    observed_environment = ""
+    main_only = False
+    if environment is not None:
+        name = environment.get("name")
+        if isinstance(name, str):
+            observed_environment = name
+        policies = reader.object(
+            f"repos/{repository}/environments/{quote(environment_name, safe='')}"
+            f"/deployment-branch-policies",
+            "environment branch 정책",
+        )
+        if policies is not None:
+            branches = policies.get("branch_policies")
+            names = (
+                [entry.get("name") for entry in branches if isinstance(entry, dict)]
+                if isinstance(branches, list)
+                else []
+            )
+            main_only = names == [branch_name]
+
+    facts = ProtectedFacts(
+        repository=full_name if isinstance(full_name, str) else "",
+        main_ref=protected_ref if branch is not None else "",
+        main_head=main_head,
+        main_protected=main_protected,
+        environment_name=observed_environment,
+        environment_main_only=main_only,
+    )
+    return facts, tuple(reader.errors)
+
+
+def collect_remote_facts(
+    *,
+    router: TransportRouter,
+    approval_repository: str,
+    approval_protected_ref: str,
+    approval_commit_sha: str,
+    document_path: str,
+    signature_path: str,
+    allowed_signers_path: str,
+    candidate_repository: str,
+    pr_number: int,
+    run_repository: str,
+    run_id: int,
+) -> tuple[RemoteObservation, tuple[RemoteFactError, ...]]:
+    """§E6-1 대상을 모두 읽는다. 하나라도 못 읽으면 그 사실을 증거로 남긴다.
+
+    ★승인 저장소는 approval credential, 후보 저장소는 candidate credential,
+      actions/runs 는 run credential 로만 부른다(C5).
+    """
+    reader = _Reader(
+        router=router,
+        approval_repository=approval_repository,
+        candidate_repository=candidate_repository,
+    )
+
+    # ── 승인 저장소 신원(측정값) ──────────────────────────────────────
+    repo_payload = reader.object(f"repos/{approval_repository}", "승인 저장소")
+    observed_repository = ""
+    if repo_payload is not None:
+        full_name = repo_payload.get("full_name")
+        if isinstance(full_name, str):
+            observed_repository = full_name
+
+    # ── 보호 ref 가 지금 가리키는 커밋(조상 판정 기준으로 고정) ────────
+    ref_short = approval_protected_ref.removeprefix("refs/")
+    ref_payload = reader.object(
+        f"repos/{approval_repository}/git/ref/{ref_short}", "보호 ref"
+    )
+    protected_ref_head = ""
+    observed_protected_ref = ""
+    if ref_payload is not None:
+        observed = ref_payload.get("ref")
+        if isinstance(observed, str):
+            observed_protected_ref = observed
+        obj = ref_payload.get("object")
+        head_sha = obj.get("sha") if isinstance(obj, dict) else None
+        if isinstance(head_sha, str) and _OID_RE.match(head_sha):
+            protected_ref_head = head_sha
+        else:
+            reader.fail(
+                REMOTE_FACT_MALFORMED, "보호 ref 가 가리키는 커밋을 읽지 못했다",
+                expected="40자 Git OID", observed=str(head_sha),
+            )
+
+    # ── 승인 커밋 ─────────────────────────────────────────────────────
+    commit = reader.object(
+        f"repos/{approval_repository}/commits/{approval_commit_sha}", "승인 커밋"
+    )
+    fetchable = commit is not None
+    committer_utc = ""
+    if commit is not None:
+        body = commit.get("commit")
+        committer = body.get("committer") if isinstance(body, dict) else None
+        normalized = _to_utc_second(committer.get("date") if isinstance(committer, dict) else None)
+        if normalized is None:
+            reader.fail(
+                REMOTE_FACT_MALFORMED, "승인 커밋 committer 시각을 읽지 못했다",
+                expected="…Z 형식 UTC", observed=str(committer),
+            )
+        else:
+            committer_utc = normalized
+
+    # ── ★조상 판정 (근사 아님) ────────────────────────────────────────
+    reachable = False
+    if fetchable and protected_ref_head:
+        verdict = is_ancestor(
+            transport=router.approval,
+            repository=approval_repository,
+            ancestor=approval_commit_sha,
+            descendant=protected_ref_head,
+        )
+        if verdict is None:
+            reader.fail(
+                REMOTE_FACT_UNAVAILABLE, "승인 커밋의 조상 관계를 판정하지 못했다",
+                expected=f"compare/{protected_ref_head}...{approval_commit_sha}",
+                observed="판정 불가",
+            )
+        else:
+            reachable = verdict
+
+    # ── 승인 산출물 원문 바이트 (★고정 repo·commit·path 의 API 응답만) ──
+    def _read(path: str, label: str) -> tuple[bytes | None, str]:
+        payload = reader.object(
+            f"repos/{approval_repository}/contents/{_encode_path(path)}"
+            f"?ref={approval_commit_sha}",
+            label,
+        )
+        data = _decode_content(payload)
+        if data is None:
+            reader.fail(
+                REMOTE_FACT_MALFORMED, f"{label} 원문 바이트를 해독하지 못했다",
+                expected=path, observed="없음",
+            )
+            return None, ""
+        observed_path = payload.get("path") if isinstance(payload, dict) else None
+        return data, observed_path if isinstance(observed_path, str) else ""
+
+    document_bytes, observed_document_path = _read(document_path, "승인 문서")
+    signature_bytes, _sig_path = _read(signature_path, "서명 파일")
+    allowed_signers_bytes, _signers_path = _read(allowed_signers_path, "allowed_signers")
+
+    # ── workflow run 시작 시각 ────────────────────────────────────────
+    run = reader.object(f"repos/{run_repository}/actions/runs/{run_id}", "workflow run")
+    run_started = _to_utc_second(run.get("run_started_at") if run is not None else None)
+    if run_started is None:
+        if run is not None:
+            reader.fail(
+                REMOTE_FACT_MALFORMED, "workflow run 시작 시각을 읽지 못했다",
+                expected=f"runs/{run_id}.run_started_at", observed="없음",
+            )
+        run_started = ""
+
+    # 승인자 login 은 승인 ★문서★ 에서 온다. 워크플로 입력으로 받지 않으므로
+    # 문서를 읽은 뒤 read_account_id() 로 따로 조회한다(여기서는 미확정).
+    approver_id = None
+
+    # ── 후보 PR 좌표 ──────────────────────────────────────────────────
+    head_sha, head_tree, base_sha = read_candidate_head(
+        transport=router.candidate, repository=candidate_repository, pr_number=pr_number
+    )
+    if head_sha is None or head_tree is None or base_sha is None:
+        reader.fail(
+            REMOTE_FACT_UNAVAILABLE, "후보 PR 좌표를 원격에서 읽지 못했다",
+            expected=f"pulls/{pr_number} 의 head sha·tree·base sha",
+            observed=f"head={head_sha} tree={head_tree} base={base_sha}",
+        )
+
+    facts = RemoteFacts(
+        approval_commit_fetchable=fetchable,
+        approval_commit_reachable=reachable,
+        approval_committer_utc=committer_utc,
+        run_started_at=run_started,
+        document_bytes=document_bytes,
+        signature_bytes=signature_bytes,
+        allowed_signers_bytes=allowed_signers_bytes,
+        approver_id_for_login=approver_id,
+    )
+    observation = RemoteObservation(
+        facts=facts,
+        protected_ref_head=protected_ref_head,
+        observed_repository=observed_repository,
+        observed_protected_ref=observed_protected_ref,
+        observed_document_path=observed_document_path,
+        candidate_head_sha=head_sha or "",
+        candidate_head_tree=head_tree or "",
+        candidate_base_sha=base_sha or "",
+    )
+    return observation, tuple(reader.errors)
+
+
+__all__ = [
+    "REMOTE_FACT_FORBIDDEN",
+    "REMOTE_FACT_MALFORMED",
+    "REMOTE_FACT_NOT_FOUND",
+    "REMOTE_FACT_RATE_LIMITED",
+    "REMOTE_FACT_UNAVAILABLE",
+    "RemoteFactError",
+    "EndpointBuilder",
+    "RemoteObservation",
+    "Route",
+    "TOKEN_ROUTE_VIOLATION",
+    "TransportRouter",
+    "route_for",
+    "Transport",
+    "TransportResult",
+    "classify",
+    "collect_remote_facts",
+    "gh_transport_for",
+    "is_ancestor",
+    "read_account_id",
+    "read_protected_facts",
+    "read_candidate_head",
+]

@@ -53,3 +53,9 @@
 /contracts/helper1-*                                   @tristan00037-tristan050
 /scripts/ci/helper1_*                                  @tristan00037-tristan050
 /scripts/run_helper1_v51_evidence.py                    @tristan00037-tristan050
+
+# Box5 AC-25 신뢰 검증 경로 — 보호 검토자(대표) 결속. 위 broad 규칙보다 뒤라 이 경로는 여기가 이긴다.
+/.github/workflows/box5-ac25-trusted-verification.yml  @tristan00037-tristan050
+/.github/box5/ac25/                                     @tristan00037-tristan050
+/scripts/ci/ac25/                                       @tristan00037-tristan050
+/tests/box5_ac25/                                       @tristan00037-tristan050

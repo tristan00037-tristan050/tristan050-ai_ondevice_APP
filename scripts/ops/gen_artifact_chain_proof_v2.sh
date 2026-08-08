@@ -4,13 +4,23 @@ set -euo pipefail
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 
-OUT="docs/ops/proofs/artifact_chain_proof_v2_latest.json"
+if [[ "${1:-}" != "--output" || -z "${2:-}" || -n "${3:-}" ]]; then
+  echo "ERROR_CODE=OUTPUT_PATH_REQUIRED"
+  exit 1
+fi
+OUT="$2"
+EVIDENCE_ROOT="${AC25_EVIDENCE_ROOT:-}"
+if [[ -z "$EVIDENCE_ROOT" ]]; then
+  echo "ERROR_CODE=OUTPUT_PATH_REQUIRED"
+  exit 1
+fi
 GIT_SHA="$(git rev-parse --short=12 HEAD)"
 NOW_UTC="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
-mkdir -p "$(dirname "$OUT")"
-
-cat > "$OUT" <<EOF
+python3 scripts/ops/write_external_json_atomic.py \
+  --repo-root "$ROOT" \
+  --evidence-root "$EVIDENCE_ROOT" \
+  --output "$OUT" <<EOF
 {
   "proof_version": 2,
   "bundle_id": "artifact_bundle_v1",

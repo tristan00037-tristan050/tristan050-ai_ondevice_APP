@@ -1,0 +1,8 @@
+{
+  "schema_version": "butler.ac25.stage_b_coordinates.v1",
+  "candidate_commit": "61ba1bf48d4ce5aa62f256ef80fc84e4e8aafd04",
+  "candidate_tree": "313f40cf35b3ee2bf7bcdd946dea9c2e1c4896c2",
+  "integration_base": "afdb237e4e6e83d96a182b6c5366a2ad95949bee",
+  "merge_commit": "9ea18f7c6213b1052ce58af7d9cdce5e2e71e09d",
+  "merge_tree": "ae66b4274d5e644b34a1df6e09ecf6569171cdbb"
+}
