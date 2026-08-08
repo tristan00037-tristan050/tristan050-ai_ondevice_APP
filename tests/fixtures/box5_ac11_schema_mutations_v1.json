@@ -1,0 +1,21 @@
+{
+  "schema_version": "butler.box5.ac11.schema-mutations.v1",
+  "expected_error_code": "AUTHORIZATION_REPLAY_SCHEMA_MISMATCH",
+  "attacks": [
+    {"name":"same_columns_no_constraints","mutation":"remove all table constraints while preserving columns and expiry index name"},
+    {"name":"dropped_primary_key","mutation":"remove replay_key primary key"},
+    {"name":"dropped_composite_unique","mutation":"remove composite replay binding unique constraint"},
+    {"name":"non_strict","mutation":"remove strict table mode"},
+    {"name":"wrong_check","mutation":"weaken expires_at check expression"},
+    {"name":"forged_unique_expiry_index","mutation":"change expiry index unique flag"},
+    {"name":"wrong_expiry_index_column","mutation":"point expiry index at consumed_at"},
+    {"name":"partial_expiry_index","mutation":"make expiry index partial"},
+    {"name":"reordered_composite_unique","mutation":"reorder composite replay binding columns"},
+    {"name":"constraint_replaced_by_external_unique","mutation":"replace table unique constraint with external unique index"},
+    {"name":"unexpected_trigger","mutation":"add trigger to replay table object set"},
+    {"name":"extra_column","mutation":"add attacker-controlled column"},
+    {"name":"changed_column_type","mutation":"change expires_at declared type"},
+    {"name":"removed_not_null","mutation":"remove nonce_hash not-null constraint"},
+    {"name":"added_default","mutation":"add consumed_at default"}
+  ]
+}

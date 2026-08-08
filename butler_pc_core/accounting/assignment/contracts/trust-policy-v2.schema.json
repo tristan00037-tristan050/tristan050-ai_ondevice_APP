@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.invalid/schemas/trust-policy-v2.schema.json",
+  "title": "Butler Product Authorization Trust Policy v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "policy_id", "issuer", "audience", "not_before", "expires_at", "keys"],
+  "properties": {
+    "schema_version": {"const": "2.0"},
+    "policy_id": {"type": "string", "pattern": "^[A-Za-z0-9._-]{1,80}$"},
+    "issuer": {"type": "string", "minLength": 1, "maxLength": 200},
+    "audience": {"type": "string", "minLength": 1, "maxLength": 200},
+    "not_before": {"type": "integer", "minimum": 0},
+    "expires_at": {"type": "integer", "minimum": 1},
+    "keys": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["key_id", "alg", "public_key_b64url", "status"],
+        "properties": {
+          "key_id": {"type": "string", "pattern": "^[A-Za-z0-9._-]{1,80}$"},
+          "alg": {"enum": ["EdDSA"]},
+          "public_key_b64url": {"type": "string", "pattern": "^[A-Za-z0-9_-]{43}$"},
+          "status": {"enum": ["ACTIVE", "RETIRED_VERIFY_ONLY"]}
+        }
+      }
+    }
+  }
+}

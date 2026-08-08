@@ -15,6 +15,8 @@ from typing import Any
 _DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
 _ID_RE = re.compile(r"^[A-Za-z0-9_-]{16,128}$")
 _ACCOUNT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+_NONCE_RE = re.compile(r"^[A-Za-z0-9_-]{32,128}$")
+_SAFE_INTEGER = 9_007_199_254_740_991
 
 
 def stable_json(value: Any) -> str:
@@ -26,7 +28,8 @@ def sha256_json(value: Any) -> str:
 
 
 def opaque_id() -> str:
-    return secrets.token_urlsafe(24).replace("-", "_")
+    # Assignment/rule/receipt contracts use one opaque UUID representation.
+    return str(__import__("uuid").uuid4())
 
 
 def utc_now() -> str:
@@ -47,6 +50,7 @@ class ReviewState(StrEnum):
     SOURCE_DECLARED_VALID = "SOURCE_DECLARED_VALID"
     AUTO_PROPOSE = "AUTO_PROPOSE"
     USER_RULE_SUGGESTED = "USER_RULE_SUGGESTED"
+    USER_RULE_APPLIED_DRAFT = "USER_RULE_APPLIED_DRAFT"
     REVIEW_REQUIRED = "REVIEW_REQUIRED"
     # ★ RI-P0-010: invalid/missing/out-of-range 날짜·금액은 1970 대체 없이 격리한다.
     REVIEW_QUARANTINE = "REVIEW_QUARANTINE"
@@ -55,10 +59,14 @@ class ReviewState(StrEnum):
 
 
 class RuleState(StrEnum):
+    # Legacy value is retained only so forward migration can identify it.  It
+    # is never returned by an active-rule lookup after schema v3.
     ACTIVE_SUGGESTION = "ACTIVE_SUGGESTION"
+    ACTIVE_USER_RULE = "ACTIVE_USER_RULE"
     INACTIVE_USER = "INACTIVE_USER"
     INACTIVE_REGISTRY = "INACTIVE_REGISTRY"
     DEGRADED_KEY_ROTATION = "DEGRADED_KEY_ROTATION"
+    CONFLICT_REVIEW = "CONFLICT_REVIEW"
 
 
 class EventType(StrEnum):
@@ -70,6 +78,9 @@ class EventType(StrEnum):
     RULE_CONFLICT_DETECTED = "RULE_CONFLICT_DETECTED"
     RULE_CONFLICT_RESOLVED = "RULE_CONFLICT_RESOLVED"
     REGISTRY_INVALIDATED = "REGISTRY_INVALIDATED"
+    RULE_APPLIED_DRAFT = "RULE_APPLIED_DRAFT"
+    RULE_APPLICATION_REVERTED = "RULE_APPLICATION_REVERTED"
+    QUARANTINE_CORRECTION_REQUESTED = "QUARANTINE_CORRECTION_REQUESTED"
 
 
 class AssignmentError(RuntimeError):
@@ -105,6 +116,8 @@ class AssignmentError(RuntimeError):
             "title": self.code.replace("_", " ").title(),
             "status": self.status,
             "code": self.code,
+            "reason_code": self.code,
+            "detail": self.safe_detail,
             "request_id": request_id,
             "safe_detail": self.safe_detail,
             "actions": list(self.actions),
@@ -125,6 +138,21 @@ class TenantContext:
     tenant_id: str
     tenant_digest: str
     actor_id: str
+    actor_id_digest: str = ""
+    session_id_digest: str = ""
+    device_id_digest: str = ""
+    permission_decision_digest: str = ""
+    permission_policy_version: str = "capability-session.v1"
+    action: str = "ACCOUNTING_REVIEW_VIEW"
+    authorization_decision_id: str = ""
+    authorization_policy_version: int | None = None
+    authorization_policy_digest: str = ""
+    authorization_assertion_digest: str = ""
+    authorization_resource_digest: str = ""
+    authorization_role: str = ""
+    role_registry_version: int = 0
+    authorization_company_id: str = ""
+    request_id: str = ""
 
     def __post_init__(self) -> None:
         if not self.tenant_id or len(self.tenant_id) > 128:
@@ -133,6 +161,36 @@ class TenantContext:
             raise ValueError("TENANT_DIGEST_INVALID")
         if not _ID_RE.fullmatch(self.actor_id):
             raise ValueError("ACTOR_ID_INVALID")
+        for value in (
+            self.actor_id_digest,
+            self.session_id_digest,
+            self.device_id_digest,
+            self.permission_decision_digest,
+            self.authorization_policy_digest,
+            self.authorization_assertion_digest,
+            self.authorization_resource_digest,
+        ):
+            if value and not _DIGEST_RE.fullmatch(value):
+                raise ValueError("AUTHENTICATED_ACTION_DIGEST_INVALID")
+        if self.authorization_decision_id and not _ACCOUNT_RE.fullmatch(
+            self.authorization_decision_id
+        ):
+            raise ValueError("AUTHORIZATION_DECISION_ID_INVALID")
+        if self.authorization_policy_version is not None and (
+            type(self.authorization_policy_version) is not int
+            or not 1 <= self.authorization_policy_version <= 9_007_199_254_740_991
+        ):
+            raise ValueError("AUTHORIZATION_POLICY_VERSION_INVALID")
+        if self.authorization_role and self.authorization_role not in {
+            "employee", "manager", "admin"
+        }:
+            raise ValueError("AUTHORIZATION_ROLE_INVALID")
+        if type(self.role_registry_version) is not int or self.role_registry_version < 0:
+            raise ValueError("ROLE_REGISTRY_VERSION_INVALID")
+        if self.authorization_company_id and len(self.authorization_company_id) > 128:
+            raise ValueError("AUTHORIZATION_COMPANY_ID_INVALID")
+        if self.request_id and not _ACCOUNT_RE.fullmatch(self.request_id):
+            raise ValueError("AUTHORIZATION_REQUEST_ID_INVALID")
 
 
 @dataclass(frozen=True, slots=True)
@@ -151,12 +209,15 @@ class CanonicalReviewTransaction:
     display_policy: str
     vendor_match_token: str
     adapter_family: str
+    adapter_version: str
     normalization_version: str
     source_record_digest: str
     review_state: ReviewState
     suggestion_account_id: str | None = None
     suggestion_rule_id: str | None = None
     safe_reason: str | None = None
+    hmac_key_id: str = ""
+    company_scope_digest: str = ""
 
     def __post_init__(self) -> None:
         if not _DIGEST_RE.fullmatch(self.tenant_digest):
@@ -181,29 +242,33 @@ class CanonicalReviewTransaction:
             raise ValueError("VENDOR_MATCH_TOKEN_INVALID")
         if not _DIGEST_RE.fullmatch(self.source_record_digest):
             raise ValueError("SOURCE_RECORD_DIGEST_INVALID")
+        if not self.adapter_family or not self.adapter_version:
+            raise ValueError("ADAPTER_IDENTITY_INVALID")
+        if self.company_scope_digest and not _DIGEST_RE.fullmatch(self.company_scope_digest):
+            raise ValueError("COMPANY_SCOPE_DIGEST_INVALID")
 
 
 @dataclass(frozen=True, slots=True)
 class AssignCommand:
     account_id: str
     scope: AssignmentScope
-    registry_digest: str
+    client_action_id: str
+    user_action_nonce: str
     expected_transaction_version: int
 
     @classmethod
     def from_dict(cls, value: dict[str, Any]) -> "AssignCommand":
         if set(value) != {
-            "schema_version",
             "account_id",
             "scope",
-            "registry_digest",
+            "client_action_id",
+            "user_action_nonce",
             "expected_transaction_version",
         }:
             raise AssignmentError("INVALID_REQUEST_SCHEMA", 422, "Unknown or missing assignment field.")
-        if value.get("schema_version") != "2.0":
-            raise AssignmentError("INVALID_REQUEST_SCHEMA", 422, "Unsupported assignment schema.")
         account_id = value.get("account_id")
-        digest = value.get("registry_digest")
+        client_action_id = value.get("client_action_id")
+        user_action_nonce = value.get("user_action_nonce")
         version = value.get("expected_transaction_version")
         try:
             scope = AssignmentScope(value.get("scope"))
@@ -211,19 +276,38 @@ class AssignCommand:
             raise AssignmentError("INVALID_REQUEST_SCHEMA", 422, "Invalid assignment scope.") from exc
         if not isinstance(account_id, str) or not _ACCOUNT_RE.fullmatch(account_id):
             raise AssignmentError("ACCOUNT_UNKNOWN", 422, "Account identifier is invalid.")
-        if not isinstance(digest, str) or not _DIGEST_RE.fullmatch(digest):
-            raise AssignmentError("REGISTRY_STALE", 409, "A full current registry digest is required.")
-        if isinstance(version, bool) or not isinstance(version, int) or version < 1:
+        try:
+            if not isinstance(client_action_id, str):
+                raise ValueError
+            parsed_action_id = __import__("uuid").UUID(client_action_id)
+            if str(parsed_action_id) != client_action_id.casefold():
+                raise ValueError
+        except ValueError as exc:
+            raise AssignmentError("INVALID_REQUEST_SCHEMA", 422, "Client action identifier is invalid.") from exc
+        if not isinstance(user_action_nonce, str) or not _NONCE_RE.fullmatch(user_action_nonce):
+            raise AssignmentError("NONCE_INVALID", 409, "The user action nonce is invalid.")
+        if (
+            isinstance(version, bool)
+            or not isinstance(version, int)
+            or version < 1
+            or version > _SAFE_INTEGER
+        ):
             raise AssignmentError("INVALID_REQUEST_SCHEMA", 422, "Transaction version is invalid.")
-        return cls(account_id, scope, digest, version)
+        return cls(account_id, scope, client_action_id, user_action_nonce, version)
 
 
 def require_mutation_headers(idempotency_key: str | None, if_match: str | None) -> tuple[str, int]:
-    if not isinstance(idempotency_key, str) or not 16 <= len(idempotency_key) <= 200:
-        raise AssignmentError("IDEMPOTENCY_KEY_REQUIRED", 422, "A valid Idempotency-Key is required.")
+    try:
+        if not isinstance(idempotency_key, str):
+            raise ValueError
+        parsed_key = __import__("uuid").UUID(idempotency_key)
+        if str(parsed_key) != idempotency_key.casefold():
+            raise ValueError
+    except ValueError as exc:
+        raise AssignmentError("IDEMPOTENCY_KEY_REQUIRED", 422, "A UUID Idempotency-Key is required.") from exc
     if not isinstance(if_match, str):
-        raise AssignmentError("TRANSACTION_STALE", 412, "If-Match is required.")
+        raise AssignmentError("STALE_ASSIGNMENT_VERSION", 409, "If-Match is required.")
     raw = if_match.strip().removeprefix('W/').strip('"')
     if not raw.isdecimal() or int(raw) < 1:
-        raise AssignmentError("TRANSACTION_STALE", 412, "If-Match must contain the transaction version.")
+        raise AssignmentError("STALE_ASSIGNMENT_VERSION", 409, "If-Match must contain the transaction version.")
     return idempotency_key, int(raw)

@@ -1,0 +1,1163 @@
+{
+  "evidence_inventory": [
+    "canonical/0001.json",
+    "canonical/0002.json",
+    "clean_status.bin",
+    "commands.jsonl",
+    "environment.json",
+    "junit/0001.xml",
+    "junit/0002.xml",
+    "mutation/canonical.json",
+    "mutation/mutation_results_v2.json",
+    "mutation/mutation_results_v3.json",
+    "mutation/pytest_mutation.stderr.bin",
+    "mutation/pytest_mutation.stdout.bin",
+    "mutation/pytest_mutation.xml",
+    "stderr/0001.bin",
+    "stderr/0002.bin",
+    "stderr/0003.bin",
+    "stderr/0004.bin",
+    "stderr/0005.bin",
+    "stdout/0001.bin",
+    "stdout/0002.bin",
+    "stdout/0003.bin",
+    "stdout/0004.bin",
+    "stdout/0005.bin",
+    "toolchain.json",
+    "tree_reconstruction.json"
+  ],
+  "evidence_semantic_categories": [
+    {
+      "expected_error": "E_EVIDENCE_NONZERO_EXIT",
+      "name": "command_nonzero",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[command_nonzero]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_RAW_MISSING",
+      "name": "stdout_missing",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[stdout_missing]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_RAW_MISSING",
+      "name": "stderr_missing",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[stderr_missing]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_RAW_DIGEST",
+      "name": "stdout_digest",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[stdout_digest]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_RAW_DIGEST",
+      "name": "stderr_digest",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[stderr_digest]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_COMMAND",
+      "name": "command_missing",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[command_missing]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_COMMAND",
+      "name": "command_extra",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[command_extra]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_COMMAND",
+      "name": "argv_swap",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[argv_swap]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_COMMAND",
+      "name": "cwd_swap",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[cwd_swap]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_COMMAND",
+      "name": "sequence_gap",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[sequence_gap]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_TIMESTAMP",
+      "name": "timestamp_syntax",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[timestamp_syntax]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_TIMESTAMP",
+      "name": "timestamp_order",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[timestamp_order]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_INVENTORY",
+      "name": "mutation_details_missing",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[mutation_details_missing]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_INVENTORY",
+      "name": "mutation_junit_missing",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[mutation_junit_missing]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_INVENTORY",
+      "name": "mutation_stream_missing",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[mutation_stream_missing]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_SCHEMA",
+      "name": "provisional_key",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[provisional_key]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_JUNIT_STATUS",
+      "name": "junit_failure",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[junit_failure]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_JUNIT_STATUS",
+      "name": "junit_error",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[junit_error]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_JUNIT_STATUS",
+      "name": "junit_skipped",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[junit_skipped]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_TESTCASE_SET",
+      "name": "testcase_missing",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[testcase_missing]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_JUNIT_IDENTITY",
+      "name": "testcase_duplicate",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[testcase_duplicate]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_MUTATION_MAPPING",
+      "name": "category_swap",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[category_swap]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_RAW_DIGEST",
+      "name": "details_junit_digest",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[details_junit_digest]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_SUMMARY",
+      "name": "summary_false",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[summary_false]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_POLICY_VERSION",
+      "name": "frozen_id_missing",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[frozen_id_missing]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_INVENTORY",
+      "name": "frozen_id_duplicate",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[frozen_id_duplicate]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_INVENTORY",
+      "name": "frozen_run_swap",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[frozen_run_swap]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_TESTCASE_SET",
+      "name": "regression_testcase_missing",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[regression_testcase_missing]"
+    },
+    {
+      "expected_error": "E_PACKAGE_CHECKSUM_DIGEST",
+      "name": "checksum_stale",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[checksum_stale]"
+    },
+    {
+      "expected_error": "E_PACKAGE_INVENTORY",
+      "name": "checksum_missing",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[checksum_missing]"
+    },
+    {
+      "expected_error": "E_PACKAGE_CHECKSUM_FORMAT",
+      "name": "checksum_duplicate",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[checksum_duplicate]"
+    },
+    {
+      "expected_error": "E_PACKAGE_INVENTORY",
+      "name": "checksum_extra",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[checksum_extra]"
+    },
+    {
+      "expected_error": "E_PACKAGE_CHECKSUM_FORMAT",
+      "name": "checksum_unsorted",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[checksum_unsorted]"
+    },
+    {
+      "expected_error": "E_PACKAGE_CHECKSUM_FORMAT",
+      "name": "checksum_self",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[checksum_self]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_POLICY",
+      "name": "policy_mismatch",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[policy_mismatch]"
+    },
+    {
+      "expected_error": "E_OBJECT_FORMAT_UNSUPPORTED",
+      "name": "object_format_sha256",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[object_format_sha256]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_NONZERO_EXIT",
+      "name": "command_exit_false",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[command_exit_false]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_NONZERO_EXIT",
+      "name": "command_exit_true",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[command_exit_true]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_NONZERO_EXIT",
+      "name": "command_exit_float",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[command_exit_float]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_NONZERO_EXIT",
+      "name": "command_exit_negative_zero_float",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[command_exit_negative_zero_float]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_NONZERO_EXIT",
+      "name": "command_exit_string",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[command_exit_string]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_NONZERO_EXIT",
+      "name": "command_exit_null",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[command_exit_null]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_COMMAND",
+      "name": "command_exit_missing",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[command_exit_missing]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_NONZERO_EXIT",
+      "name": "mutation_exit_false",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[mutation_exit_false]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_NONZERO_EXIT",
+      "name": "mutation_exit_true",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[mutation_exit_true]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_NONZERO_EXIT",
+      "name": "mutation_exit_float",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[mutation_exit_float]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_NONZERO_EXIT",
+      "name": "mutation_exit_negative_zero_float",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[mutation_exit_negative_zero_float]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_NONZERO_EXIT",
+      "name": "mutation_exit_string",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[mutation_exit_string]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_NONZERO_EXIT",
+      "name": "mutation_exit_null",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[mutation_exit_null]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_SCHEMA",
+      "name": "mutation_exit_missing",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[mutation_exit_missing]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_COMMAND",
+      "name": "sequence_false",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[sequence_false]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_COMMAND",
+      "name": "sequence_float",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[sequence_float]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_MUTATION_MAPPING",
+      "name": "category_false",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[category_false]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_MUTATION_MAPPING",
+      "name": "category_float",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[category_float]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_SUMMARY",
+      "name": "summary_count_false",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[summary_count_false]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_SUMMARY",
+      "name": "summary_count_float",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[summary_count_float]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_POLICY",
+      "name": "policy_limit_false",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[policy_limit_false]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_POLICY",
+      "name": "policy_limit_float",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[policy_limit_float]"
+    },
+    {
+      "expected_error": "E_FINAL_PACKAGE_MATRIX",
+      "name": "final_matrix_exit_false",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack_final_matrix_exit[false]"
+    },
+    {
+      "expected_error": "E_FINAL_PACKAGE_MATRIX",
+      "name": "final_matrix_exit_true",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack_final_matrix_exit[true]"
+    },
+    {
+      "expected_error": "E_FINAL_PACKAGE_MATRIX",
+      "name": "final_matrix_exit_float",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack_final_matrix_exit[float]"
+    },
+    {
+      "expected_error": "E_FINAL_PACKAGE_MATRIX",
+      "name": "final_matrix_exit_negative_zero_float",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack_final_matrix_exit[negative-zero-float]"
+    },
+    {
+      "expected_error": "E_FINAL_PACKAGE_MATRIX",
+      "name": "final_matrix_exit_string",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack_final_matrix_exit[string]"
+    },
+    {
+      "expected_error": "E_FINAL_PACKAGE_MATRIX",
+      "name": "final_matrix_exit_null",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack_final_matrix_exit[null]"
+    },
+    {
+      "expected_error": "E_FINAL_PACKAGE_MATRIX",
+      "name": "final_matrix_exit_missing",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack_final_matrix_exit[missing]"
+    },
+    {
+      "expected_error": "E_INPUT_MUTATED",
+      "name": "verifier_purity_no_tmp_and_repeatable",
+      "testcase": "tests.ac23.test_verifier_purity::test_evidence_semantics_attack_verifier_purity_no_tmp_and_repeatable"
+    },
+    {
+      "expected_error": "E_INPUT_MUTATED",
+      "name": "verifier_purity_read_only_input",
+      "testcase": "tests.ac23.test_verifier_purity::test_evidence_semantics_attack_verifier_purity_read_only_input"
+    },
+    {
+      "expected_error": "E_WORK_ROOT",
+      "name": "verifier_purity_explicit_work_root",
+      "testcase": "tests.ac23.test_verifier_purity::test_evidence_semantics_attack_verifier_purity_explicit_work_root"
+    },
+    {
+      "expected_error": "E_WORK_ROOT",
+      "name": "verifier_purity_rejects_internal_work_root",
+      "testcase": "tests.ac23.test_verifier_purity::test_evidence_semantics_attack_verifier_purity_rejects_internal_work_root"
+    },
+    {
+      "expected_error": "E_WORK_ROOT_CLEANUP",
+      "name": "verifier_purity_failure_has_no_residue",
+      "testcase": "tests.ac23.test_verifier_purity::test_evidence_semantics_attack_verifier_purity_failure_has_no_residue"
+    },
+    {
+      "expected_error": "E_WORK_ROOT_CLEANUP",
+      "name": "verifier_purity_child_temp_and_git_guards",
+      "testcase": "tests.ac23.test_verifier_purity::test_evidence_semantics_attack_verifier_purity_child_temp_and_git_guards"
+    },
+    {
+      "expected_error": "E_WORK_ROOT_CLEANUP",
+      "name": "verifier_purity_cleanup_failure_is_nonpass",
+      "testcase": "tests.ac23.test_verifier_purity::test_evidence_semantics_attack_verifier_purity_cleanup_failure_is_nonpass"
+    },
+    {
+      "expected_error": "E_INPUT_MUTATED",
+      "name": "verifier_purity_input_mutation_overrides",
+      "testcase": "tests.ac23.test_verifier_purity::test_evidence_semantics_attack_verifier_purity_input_mutation_overrides"
+    }
+  ],
+  "junit_profile": {
+    "case_attributes": [
+      "classname",
+      "name",
+      "time"
+    ],
+    "case_tag": "testcase",
+    "closed_junit_cases": [
+      {
+        "category": 1,
+        "expected_error": "E_EVIDENCE_JUNIT_STATUS",
+        "name": "descendant_failure",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[descendant_failure]"
+      },
+      {
+        "category": 1,
+        "expected_error": "E_EVIDENCE_JUNIT_STATUS",
+        "name": "descendant_error",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[descendant_error]"
+      },
+      {
+        "category": 1,
+        "expected_error": "E_EVIDENCE_JUNIT_STATUS",
+        "name": "descendant_skipped",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[descendant_skipped]"
+      },
+      {
+        "category": 2,
+        "expected_error": "E_EVIDENCE_JUNIT_SIZE",
+        "name": "size_limit",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[size_limit]"
+      },
+      {
+        "category": 3,
+        "expected_error": "E_EVIDENCE_JUNIT_DECLARATION",
+        "name": "doctype",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[doctype]"
+      },
+      {
+        "category": 3,
+        "expected_error": "E_EVIDENCE_JUNIT_DECLARATION",
+        "name": "entity",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[entity]"
+      },
+      {
+        "category": 4,
+        "expected_error": "E_EVIDENCE_JUNIT_STRUCTURE",
+        "name": "nested_testsuites",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[nested_testsuites]"
+      },
+      {
+        "category": 4,
+        "expected_error": "E_EVIDENCE_JUNIT_STRUCTURE",
+        "name": "nested_testsuite",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[nested_testsuite]"
+      },
+      {
+        "category": 4,
+        "expected_error": "E_EVIDENCE_JUNIT_STRUCTURE",
+        "name": "unknown_wrapper",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[unknown_wrapper]"
+      },
+      {
+        "category": 5,
+        "expected_error": "E_EVIDENCE_JUNIT_ATTRIBUTE",
+        "name": "negative_tests",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[negative_tests]"
+      },
+      {
+        "category": 5,
+        "expected_error": "E_EVIDENCE_JUNIT_ATTRIBUTE",
+        "name": "float_failures",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[float_failures]"
+      },
+      {
+        "category": 5,
+        "expected_error": "E_EVIDENCE_JUNIT_ATTRIBUTE",
+        "name": "signed_errors",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[signed_errors]"
+      },
+      {
+        "category": 5,
+        "expected_error": "E_EVIDENCE_JUNIT_ATTRIBUTE",
+        "name": "missing_skipped",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[missing_skipped]"
+      },
+      {
+        "category": 6,
+        "expected_error": "E_EVIDENCE_JUNIT_COUNT",
+        "name": "tests_mismatch",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[tests_mismatch]"
+      },
+      {
+        "category": 6,
+        "expected_error": "E_EVIDENCE_JUNIT_STATUS",
+        "name": "hidden_failure_count_zero",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[hidden_failure_count_zero]"
+      },
+      {
+        "category": 7,
+        "expected_error": "E_EVIDENCE_JUNIT_IDENTITY",
+        "name": "duplicate_pair",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[duplicate_pair]"
+      },
+      {
+        "category": 7,
+        "expected_error": "E_EVIDENCE_JUNIT_IDENTITY",
+        "name": "display_id_collision",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[display_id_collision]"
+      },
+      {
+        "category": 8,
+        "expected_error": "E_EVIDENCE_JUNIT_STRUCTURE",
+        "name": "namespaced_root",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[namespaced_root]"
+      },
+      {
+        "category": 8,
+        "expected_error": "E_EVIDENCE_JUNIT_STRUCTURE",
+        "name": "namespaced_testcase",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[namespaced_testcase]"
+      },
+      {
+        "category": 8,
+        "expected_error": "E_EVIDENCE_JUNIT_STATUS",
+        "name": "namespaced_failure",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[namespaced_failure]"
+      },
+      {
+        "category": 9,
+        "expected_error": "E_EVIDENCE_JUNIT_STATUS",
+        "name": "failure_under_suite",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[failure_under_suite]"
+      },
+      {
+        "category": 9,
+        "expected_error": "E_EVIDENCE_JUNIT_STRUCTURE",
+        "name": "passed_under_testcase",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[passed_under_testcase]"
+      },
+      {
+        "category": 9,
+        "expected_error": "E_EVIDENCE_JUNIT_STRUCTURE",
+        "name": "testcase_under_wrapper",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[testcase_under_wrapper]"
+      },
+      {
+        "category": 10,
+        "expected_error": "E_EVIDENCE_JUNIT_DECLARATION",
+        "name": "comment_before_root",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[comment_before_root]"
+      },
+      {
+        "category": 10,
+        "expected_error": "E_EVIDENCE_JUNIT_DECLARATION",
+        "name": "comment_inside_root",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[comment_inside_root]"
+      },
+      {
+        "category": 10,
+        "expected_error": "E_EVIDENCE_JUNIT_DECLARATION",
+        "name": "comment_after_root",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[comment_after_root]"
+      },
+      {
+        "category": 11,
+        "expected_error": "E_EVIDENCE_JUNIT_DECLARATION",
+        "name": "pi_before_root",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[pi_before_root]"
+      },
+      {
+        "category": 11,
+        "expected_error": "E_EVIDENCE_JUNIT_DECLARATION",
+        "name": "pi_inside_root",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[pi_inside_root]"
+      },
+      {
+        "category": 11,
+        "expected_error": "E_EVIDENCE_JUNIT_DECLARATION",
+        "name": "pi_after_root",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[pi_after_root]"
+      },
+      {
+        "category": 12,
+        "expected_error": "E_EVIDENCE_JUNIT_DECLARATION",
+        "name": "cdata",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[cdata]"
+      },
+      {
+        "category": 13,
+        "expected_error": "E_EVIDENCE_JUNIT_STRUCTURE",
+        "name": "root_text",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[root_text]"
+      },
+      {
+        "category": 13,
+        "expected_error": "E_EVIDENCE_JUNIT_STRUCTURE",
+        "name": "suite_text",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[suite_text]"
+      },
+      {
+        "category": 13,
+        "expected_error": "E_EVIDENCE_JUNIT_STRUCTURE",
+        "name": "testcase_text",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[testcase_text]"
+      },
+      {
+        "category": 13,
+        "expected_error": "E_EVIDENCE_JUNIT_STRUCTURE",
+        "name": "testcase_tail",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[testcase_tail]"
+      },
+      {
+        "category": 14,
+        "expected_error": "E_EVIDENCE_JUNIT_ATTRIBUTE",
+        "name": "iso_week_timestamp",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[iso_week_timestamp]"
+      },
+      {
+        "category": 14,
+        "expected_error": "E_EVIDENCE_JUNIT_ATTRIBUTE",
+        "name": "basic_timestamp",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[basic_timestamp]"
+      },
+      {
+        "category": 14,
+        "expected_error": "E_EVIDENCE_JUNIT_ATTRIBUTE",
+        "name": "timestamp_without_timezone",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[timestamp_without_timezone]"
+      },
+      {
+        "category": 14,
+        "expected_error": "E_EVIDENCE_JUNIT_ATTRIBUTE",
+        "name": "timestamp_non_utc",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[timestamp_non_utc]"
+      },
+      {
+        "category": 14,
+        "expected_error": "E_EVIDENCE_JUNIT_ATTRIBUTE",
+        "name": "timestamp_wrong_precision",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[timestamp_wrong_precision]"
+      },
+      {
+        "category": 15,
+        "expected_error": "E_EVIDENCE_JUNIT_ATTRIBUTE",
+        "name": "classname_lf_reference",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[classname_lf_reference]"
+      },
+      {
+        "category": 15,
+        "expected_error": "E_EVIDENCE_JUNIT_ATTRIBUTE",
+        "name": "name_cr_reference",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[name_cr_reference]"
+      },
+      {
+        "category": 15,
+        "expected_error": "E_EVIDENCE_JUNIT_ATTRIBUTE",
+        "name": "name_tab_reference",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[name_tab_reference]"
+      },
+      {
+        "category": 16,
+        "expected_error": "E_EVIDENCE_JUNIT_DECLARATION",
+        "name": "bom",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[bom]"
+      },
+      {
+        "category": 16,
+        "expected_error": "E_EVIDENCE_JUNIT_ATTRIBUTE",
+        "name": "unknown_attribute",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[unknown_attribute]"
+      },
+      {
+        "category": 16,
+        "expected_error": "E_EVIDENCE_JUNIT_DECLARATION",
+        "name": "noncanonical_declaration",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[noncanonical_declaration]"
+      }
+    ],
+    "fixture_manifest_sha256": "5a6462118d26cc4c9cd150ec063fb485635bbbd929bb85ab5ef2902e6d9031e6",
+    "profile": "pytest-junit-pass-v2",
+    "root_attributes": [
+      "name"
+    ],
+    "root_name": "pytest tests",
+    "root_tag": "testsuites",
+    "suite_attributes": [
+      "errors",
+      "failures",
+      "hostname",
+      "name",
+      "skipped",
+      "tests",
+      "time",
+      "timestamp"
+    ],
+    "suite_name": "pytest",
+    "suite_tag": "testsuite"
+  },
+  "legacy_mutation_categories": [
+    {
+      "category": 1,
+      "testcases": [
+        "tests.ac23.test_candidate_artifact_identity::test_mutation_01_head_commit"
+      ]
+    },
+    {
+      "category": 2,
+      "testcases": [
+        "tests.ac23.test_candidate_artifact_identity::test_mutation_02_head_tree"
+      ]
+    },
+    {
+      "category": 3,
+      "testcases": [
+        "tests.ac23.test_candidate_artifact_identity::test_mutation_03_base_commit"
+      ]
+    },
+    {
+      "category": 4,
+      "testcases": [
+        "tests.ac23.test_candidate_artifact_identity::test_mutation_04_base_tree"
+      ]
+    },
+    {
+      "category": 5,
+      "testcases": [
+        "tests.ac23.test_candidate_artifact_identity::test_mutation_05_repository_url"
+      ]
+    },
+    {
+      "category": 6,
+      "testcases": [
+        "tests.ac23.test_candidate_artifact_identity::test_mutation_06_to_09_raw_digest[PATCH/cumulative.patch-E_PATCH_DIGEST]"
+      ]
+    },
+    {
+      "category": 7,
+      "testcases": [
+        "tests.ac23.test_candidate_artifact_identity::test_mutation_06_to_09_raw_digest[SOURCE/candidate_source.tar-E_SOURCE_DIGEST]"
+      ]
+    },
+    {
+      "category": 8,
+      "testcases": [
+        "tests.ac23.test_candidate_artifact_identity::test_mutation_06_to_09_raw_digest[IDENTITY/changed_paths.nul-E_CHANGED_PATH_DIGEST]"
+      ]
+    },
+    {
+      "category": 9,
+      "testcases": [
+        "tests.ac23.test_candidate_artifact_identity::test_mutation_06_to_09_raw_digest[EVIDENCE/evidence_raw.tar-E_EVIDENCE_DIGEST]"
+      ]
+    },
+    {
+      "category": 10,
+      "testcases": [
+        "tests.ac23.test_candidate_artifact_identity::test_mutation_10_contract_digest"
+      ]
+    },
+    {
+      "category": 11,
+      "testcases": [
+        "tests.ac23.test_candidate_artifact_identity::test_mutation_11_bundle"
+      ]
+    },
+    {
+      "category": 12,
+      "testcases": [
+        "tests.ac23.test_candidate_artifact_identity::test_mutation_12_resealed_patch_tree"
+      ]
+    },
+    {
+      "category": 13,
+      "testcases": [
+        "tests.ac23.test_candidate_artifact_identity::test_mutation_13_resealed_source_tree"
+      ]
+    },
+    {
+      "category": 14,
+      "testcases": [
+        "tests.ac23.test_candidate_artifact_identity::test_mutation_14_source_mode"
+      ]
+    },
+    {
+      "category": 15,
+      "testcases": [
+        "tests.ac23.test_candidate_artifact_identity::test_mutation_15_source_untracked"
+      ]
+    },
+    {
+      "category": 16,
+      "testcases": [
+        "tests.ac23.test_candidate_artifact_identity::test_mutation_16_archive_escape[addition0]",
+        "tests.ac23.test_candidate_artifact_identity::test_mutation_16_archive_escape[addition1]",
+        "tests.ac23.test_candidate_artifact_identity::test_mutation_16_archive_escape[addition2]"
+      ]
+    },
+    {
+      "category": 17,
+      "testcases": [
+        "tests.ac23.test_candidate_artifact_identity::test_mutation_17_archive_collision[additions0]",
+        "tests.ac23.test_candidate_artifact_identity::test_mutation_17_archive_collision[additions1]",
+        "tests.ac23.test_candidate_artifact_identity::test_mutation_17_archive_collision[additions2]"
+      ]
+    },
+    {
+      "category": 18,
+      "testcases": [
+        "tests.ac23.test_candidate_artifact_identity::test_mutation_18_self_reference"
+      ]
+    },
+    {
+      "category": 19,
+      "testcases": [
+        "tests.ac23.test_candidate_artifact_identity::test_mutation_19_schema[missing]",
+        "tests.ac23.test_candidate_artifact_identity::test_mutation_19_schema[unknown]",
+        "tests.ac23.test_candidate_artifact_identity::test_mutation_19_schema[duplicate]"
+      ]
+    },
+    {
+      "category": 20,
+      "testcases": [
+        "tests.ac23.test_candidate_artifact_identity::test_mutation_20_changed_path_semantics[reordered]",
+        "tests.ac23.test_candidate_artifact_identity::test_mutation_20_changed_path_semantics[missing]"
+      ]
+    }
+  ],
+  "limits": {
+    "max_attribute_count_per_element": 8,
+    "max_attribute_value_bytes": 8192,
+    "max_json_bytes": 16777216,
+    "max_junit_bytes": 16777216,
+    "max_output_bytes_per_stream": 268435456,
+    "max_single_file_bytes": 1073741824,
+    "max_tar_members": 100000,
+    "max_testcase_id_bytes": 4096,
+    "max_testcases_per_run": 100000,
+    "max_total_bytes": 4294967296,
+    "max_xml_elements": 200000
+  },
+  "object_format": "sha1",
+  "regression_runs": [
+    {
+      "argv": [
+        "python3",
+        "-m",
+        "pytest",
+        "-q",
+        "--disable-warnings",
+        "tests/ac23/test_candidate_artifact_identity.py",
+        "-k",
+        "unit",
+        "--junitxml=tests/ac23/.ac23-evidence/run-0001.xml"
+      ],
+      "cwd": "candidate",
+      "run_id": "ac23-source-unit"
+    },
+    {
+      "argv": [
+        "python3",
+        "-m",
+        "pytest",
+        "-q",
+        "--disable-warnings",
+        "tests/accounting/assignment",
+        "tests/auth/test_capability_token.py",
+        "tests/firstscreen_trusted/test_trusted_junit_semantics_box5.py",
+        "tests/company_policy/test_role_registry_routes.py",
+        "tests/company_policy/test_role_registry_store.py",
+        "--junitxml=tests/ac23/.ac23-evidence/run-0002.xml"
+      ],
+      "cwd": "candidate",
+      "run_id": "frozen-python"
+    },
+    {
+      "argv": [
+        "npm",
+        "test",
+        "--",
+        "--run"
+      ],
+      "cwd": "candidate/butler-desktop",
+      "run_id": "desktop-vitest"
+    },
+    {
+      "argv": [
+        "cargo",
+        "test",
+        "--lib",
+        "--quiet"
+      ],
+      "cwd": "candidate/butler-desktop/src-tauri",
+      "run_id": "tauri-rust-lib"
+    },
+    {
+      "argv": [
+        "python3",
+        "scripts/verify_box5_integration_lock.py",
+        "--allow-worktree-base"
+      ],
+      "cwd": "candidate",
+      "run_id": "integration-lock"
+    }
+  ],
+  "required_runs": [
+    {
+      "argv": [
+        "python3",
+        "-m",
+        "pytest",
+        "-q",
+        "--disable-warnings",
+        "tests/ac23/test_candidate_artifact_identity.py",
+        "-k",
+        "unit",
+        "--junitxml=tests/ac23/.ac23-evidence/run-0001.xml"
+      ],
+      "canonical_result_path": "canonical/0001.json",
+      "cwd": "candidate",
+      "expected_testcase_ids": [
+        "tests.ac23.test_candidate_artifact_identity::test_unit_archive_limits_cannot_be_raised",
+        "tests.ac23.test_candidate_artifact_identity::test_unit_manifest_key_set_is_exact",
+        "tests.ac23.test_candidate_artifact_identity::test_unit_url_rejects_credential_material[https://example.com/repo.git#fragment]",
+        "tests.ac23.test_candidate_artifact_identity::test_unit_url_rejects_credential_material[https://example.com/repo.git?token=x]",
+        "tests.ac23.test_candidate_artifact_identity::test_unit_url_rejects_credential_material[https://user:password@example.com/repo.git]",
+        "tests.ac23.test_candidate_artifact_identity::test_unit_url_scp_canonicalization"
+      ],
+      "parser": "pytest-junit-pass-v2",
+      "required": true,
+      "result_path": "junit/0001.xml",
+      "run_id": "ac23-source-unit"
+    },
+    {
+      "argv": [
+        "python3",
+        "-m",
+        "pytest",
+        "-q",
+        "--disable-warnings",
+        "tests/accounting/assignment",
+        "tests/auth/test_capability_token.py",
+        "tests/firstscreen_trusted/test_trusted_junit_semantics_box5.py",
+        "tests/company_policy/test_role_registry_routes.py",
+        "tests/company_policy/test_role_registry_store.py",
+        "--junitxml=tests/ac23/.ac23-evidence/run-0002.xml"
+      ],
+      "canonical_result_path": "canonical/0002.json",
+      "cwd": "candidate",
+      "expected_testcase_ids": [
+        "tests.accounting.assignment.test_ac11_schema_matrix_verifier::test_matrix_hash_mismatch_is_blocked",
+        "tests.accounting.assignment.test_ac11_schema_matrix_verifier::test_missing_duplicate_unknown_or_contradictory_matrix_is_blocked[<lambda>0]",
+        "tests.accounting.assignment.test_ac11_schema_matrix_verifier::test_missing_duplicate_unknown_or_contradictory_matrix_is_blocked[<lambda>1]",
+        "tests.accounting.assignment.test_ac11_schema_matrix_verifier::test_missing_duplicate_unknown_or_contradictory_matrix_is_blocked[<lambda>2]",
+        "tests.accounting.assignment.test_ac11_schema_matrix_verifier::test_missing_duplicate_unknown_or_contradictory_matrix_is_blocked[<lambda>3]",
+        "tests.accounting.assignment.test_ac11_schema_matrix_verifier::test_missing_duplicate_unknown_or_contradictory_matrix_is_blocked[<lambda>4]",
+        "tests.accounting.assignment.test_ac11_schema_matrix_verifier::test_raw_product_matrix_has_strict_valid_semantics",
+        "tests.accounting.assignment.test_assignment_api::test_http_product_route_rejects_auth_and_forged_evidence",
+        "tests.accounting.assignment.test_assignment_api::test_http_product_route_review_assign_and_refresh",
+        "tests.accounting.assignment.test_assignment_api::test_upload_projection_registration_exposes_review_count",
+        "tests.accounting.assignment.test_assignment_runtime::test_account_column_ambiguity_requires_explicit_selection",
+        "tests.accounting.assignment.test_assignment_runtime::test_assign_is_atomic_idempotent_and_raw_zero",
+        "tests.accounting.assignment.test_assignment_runtime::test_assignment_and_rule_roll_back_on_second_event_failure",
+        "tests.accounting.assignment.test_assignment_runtime::test_client_cannot_forge_registry_or_tenant_evidence",
+        "tests.accounting.assignment.test_assignment_runtime::test_conflict_keep_existing_assigns_current_transaction_only",
+        "tests.accounting.assignment.test_assignment_runtime::test_conflicting_rule_blocks_assignment_and_rule_replacement",
+        "tests.accounting.assignment.test_assignment_runtime::test_event_table_rejects_update_and_key_rotation_fails_closed",
+        "tests.accounting.assignment.test_assignment_runtime::test_exact_account_column_removes_row_from_unaccounted",
+        "tests.accounting.assignment.test_assignment_runtime::test_expired_batch_removes_authorized_raw_projection",
+        "tests.accounting.assignment.test_assignment_runtime::test_future_rule_creates_draft_supports_revert_and_deactivation",
+        "tests.accounting.assignment.test_assignment_runtime::test_fuzzy_account_cell_never_assigns",
+        "tests.accounting.assignment.test_assignment_runtime::test_pagination_is_stable_tamper_evident_and_snapshot_bound",
+        "tests.accounting.assignment.test_assignment_runtime::test_persisted_rows_do_not_contain_forbidden_raw_keys",
+        "tests.accounting.assignment.test_assignment_runtime::test_registry_assignable_is_server_calculated",
+        "tests.accounting.assignment.test_assignment_runtime::test_same_idempotency_key_different_body_is_blocked",
+        "tests.accounting.assignment.test_assignment_runtime::test_stale_write_and_cross_tenant_access_are_blocked",
+        "tests.accounting.assignment.test_assignment_runtime::test_tenant_tokens_are_unlinkable_and_keystore_failure_degrades_capability",
+        "tests.accounting.assignment.test_assignment_runtime::test_two_windows_same_version_allow_exactly_one_assignment",
+        "tests.accounting.assignment.test_assignment_runtime::test_unapproved_bundled_overlay_publishes_no_assignable_accounts",
+        "tests.accounting.assignment.test_authorization_product_route::test_ac11_schema_mismatch_blocks_product_write_and_audits_denial",
+        "tests.accounting.assignment.test_authorization_product_route::test_all_six_missing_assertion_denials_are_audited_without_mutation",
+        "tests.accounting.assignment.test_authorization_product_route::test_audit_event_binds_signed_decision_policy_request_nonce_and_session",
+        "tests.accounting.assignment.test_authorization_product_route::test_authority_audit_failure_rolls_back_privileged_write",
+        "tests.accounting.assignment.test_authorization_product_route::test_authorized_future_rule_and_quarantine_actions_are_reachable",
+        "tests.accounting.assignment.test_authorization_product_route::test_caller_cannot_inject_role_capabilities_verifier_or_context",
+        "tests.accounting.assignment.test_authorization_product_route::test_contract_forgery_inputs_are_not_product_route_dependencies",
+        "tests.accounting.assignment.test_authorization_product_route::test_denial_audit_failure_remains_fail_closed",
+        "tests.accounting.assignment.test_authorization_product_route::test_independent_audit_verifier_detects_raw_chain_attacks[delete-AUDIT_EVENT_MISSING]",
+        "tests.accounting.assignment.test_authorization_product_route::test_independent_audit_verifier_detects_raw_chain_attacks[insert-AUDIT_EVENT_HASH_MISMATCH]",
+        "tests.accounting.assignment.test_authorization_product_route::test_independent_audit_verifier_detects_raw_chain_attacks[payload-AUDIT_EVENT_HASH_MISMATCH]",
+        "tests.accounting.assignment.test_authorization_product_route::test_independent_audit_verifier_detects_raw_chain_attacks[sequence-AUDIT_SEQUENCE_INVALID]",
+        "tests.accounting.assignment.test_authorization_product_route::test_independent_audit_verifier_observes_all_six_real_allow_paths",
+        "tests.accounting.assignment.test_authorization_product_route::test_invalid_assertion_matrix_is_fail_closed[overrides0-USER_ASSERTION_WRONG_AUDIENCE]",
+        "tests.accounting.assignment.test_authorization_product_route::test_invalid_assertion_matrix_is_fail_closed[overrides1-USER_ASSERTION_WRONG_ISSUER]",
+        "tests.accounting.assignment.test_authorization_product_route::test_invalid_assertion_matrix_is_fail_closed[overrides2-USER_ASSERTION_WRONG_TYPE]",
+        "tests.accounting.assignment.test_authorization_product_route::test_invalid_assertion_matrix_is_fail_closed[overrides3-USER_ASSERTION_INVALID]",
+        "tests.accounting.assignment.test_authorization_product_route::test_invalid_assertion_matrix_is_fail_closed[overrides4-USER_ASSERTION_INVALID]",
+        "tests.accounting.assignment.test_authorization_product_route::test_invalid_assertion_matrix_is_fail_closed[overrides5-TENANT_COMPANY_MISMATCH]",
+        "tests.accounting.assignment.test_authorization_product_route::test_invalid_assertion_matrix_is_fail_closed[overrides6-DEVICE_SESSION_BINDING_MISMATCH]",
+        "tests.accounting.assignment.test_authorization_product_route::test_invalid_assertion_matrix_is_fail_closed[overrides7-DEVICE_SESSION_BINDING_MISMATCH]",
+        "tests.accounting.assignment.test_authorization_product_route::test_invalid_assertion_matrix_is_fail_closed[overrides8-USER_ASSERTION_INVALID]",
+        "tests.accounting.assignment.test_authorization_product_route::test_invalid_assertion_matrix_is_fail_closed[overrides9-USER_ASSERTION_EXPIRED]",
+        "tests.accounting.assignment.test_authorization_product_route::test_missing_user_assertion_invalid_ipc_and_binding_mismatch_are_blocked",
+        "tests.accounting.assignment.test_authorization_product_route::test_non_app_build_stamp_cannot_select_product_trust",
+        "tests.accounting.assignment.test_authorization_product_route::test_owner_distribution_stamp_binds_product_policy_without_runtime_input",
+        "tests.accounting.assignment.test_authorization_product_route::test_product_composition_has_one_shared_transport_authenticator",
+        "tests.accounting.assignment.test_authorization_product_route::test_product_rule_application_revert_uses_its_own_authority_action",
+        "tests.accounting.assignment.test_authorization_product_route::test_production_authorization_import_graph_contains_no_issuer_or_private_key",
+        "tests.accounting.assignment.test_authorization_product_route::test_rule_revoke_and_conflict_resolution_require_and_accept_exact_actions",
+        "tests.accounting.assignment.test_authorization_product_route::test_same_assertion_is_blocked_after_authorization_service_restart",
+        "tests.accounting.assignment.test_authorization_product_route::test_same_service_rechecks_role_registry_after_live_revocation",
+        "tests.accounting.assignment.test_authorization_product_route::test_signed_assertion_replay_is_rejected_without_second_effect",
+        "tests.accounting.assignment.test_authorization_product_route::test_submitter_selected_trust_cannot_enable_product_composition",
+        "tests.accounting.assignment.test_authorization_product_route::test_twenty_identical_product_requests_create_exactly_one_side_effect",
+        "tests.accounting.assignment.test_authorization_product_route::test_user_this_only_succeeds_and_future_without_action_is_zero_effect",
+        "tests.accounting.assignment.test_authorization_product_route::test_wildcard_and_normalization_action_bypasses_are_rejected[ ALL ]",
+        "tests.accounting.assignment.test_authorization_product_route::test_wildcard_and_normalization_action_bypasses_are_rejected[*]",
+        "tests.accounting.assignment.test_authorization_product_route::test_wildcard_and_normalization_action_bypasses_are_rejected[ASSIGNMENT_CREATE ]",
+        "tests.accounting.assignment.test_authorization_product_route::test_wildcard_and_normalization_action_bypasses_are_rejected[\\uff21\\uff2c\\uff2c]",
+        "tests.accounting.assignment.test_authorization_product_route::test_wildcard_and_normalization_action_bypasses_are_rejected[]",
+        "tests.accounting.assignment.test_authorization_product_route::test_wildcard_and_normalization_action_bypasses_are_rejected[all]",
+        "tests.accounting.assignment.test_authorization_product_route::test_wildcard_and_prefix_resource_bypasses_are_rejected[ txn_deny ]",
+        "tests.accounting.assignment.test_authorization_product_route::test_wildcard_and_prefix_resource_bypasses_are_rejected[*]",
+        "tests.accounting.assignment.test_authorization_product_route::test_wildcard_and_prefix_resource_bypasses_are_rejected[\\uff34\\uff38\\uff2e]",
+        "tests.accounting.assignment.test_authorization_product_route::test_wildcard_and_prefix_resource_bypasses_are_rejected[all]",
+        "tests.accounting.assignment.test_authorization_product_route::test_wildcard_and_prefix_resource_bypasses_are_rejected[txn/*]",
+        "tests.accounting.assignment.test_authorization_product_route::test_wildcard_and_prefix_resource_bypasses_are_rejected[txn]",
+        "tests.accounting.assignment.test_authorization_replay_round3::test_all_fifteen_schema_mutations_block_both_consumes_before_insert",
+        "tests.accounting.assignment.test_authorization_replay_round3::test_busy_read_only_corrupt_and_schema_drift_are_fail_closed",
+        "tests.accounting.assignment.test_authorization_replay_round3::test_exact_replay_key_matches_normative_domain_formula",
+        "tests.accounting.assignment.test_authorization_replay_round3::test_gc_retention_boundary_and_unique_binding",
+        "tests.accounting.assignment.test_authorization_replay_round3::test_missing_invalid_tampered_or_wrong_digest_contract_is_blocked[CREATE TABLE IF NOT EXISTS accounting_authorization_replay_v2 (\\n    replay_key TEXT PRIMARY KEY NOT NULL\\n        CHECK(length(replay_key) = 64 AND replay_key NOT GLOB '*[^0-9a-f]*'),\\n    jti_hash TEXT NOT NULL\\n        CHECK(length(jti_hash) = 64 AND jti_hash NOT GLOB '*[^0-9a-f]*'),\\n    nonce_hash TEXT NOT NULL\\n        CHECK(length(nonce_hash) = 64 AND nonce_hash NOT GLOB '*[^0-9a-f]*'),\\n    tenant_id_hash TEXT NOT NULL\\n        CHECK(length(tenant_id_hash) = 64 AND tenant_id_hash NOT GLOB '*[^0-9a-f]*'),\\n    session_id_hash TEXT NOT NULL\\n        CHECK(length(session_id_hash) = 64 AND session_id_hash NOT GLOB '*[^0-9a-f]*'),\\n    action TEXT NOT NULL CHECK(action IN (\\n        'ASSIGNMENT_CREATE',\\n        'RULE_FUTURE_CREATE',\\n        'RULE_DEACTIVATE',\\n        'RULE_APPLICATION_REVERT',\\n        'QUARANTINE_ROW_RECOMPILE',\\n        'CONFLICT_RESOLVE'\\n    )),\\n    resource_hash TEXT NOT NULL\\n        CHECK(length(resource_hash) = 64 AND resource_hash NOT GLOB '*[^0-9a-f]*'),\\n    policy_digest TEXT NOT NULL\\n        CHECK(length(policy_digest) = 64 AND policy_digest NOT GLOB '*[^0-9a-f]*'),\\n    expires_at INTEGER NOT NULL CHECK(expires_at > 0),\\n    consumed_at INTEGER NOT NULL CHECK(consumed_at > 0),\\n    UNIQUE(jti_hash, nonce_hash, tenant_id_hash, session_id_hash)\\n) STRICT;\\n\\nCREATE INDEX IF NOT EXISTS idx_accounting_authorization_replay_v2_expiry\\nON accounting_authorization_replay_v2(expires_at);\\n-0000000000000000000000000000000000000000000000000000000000000000]",
+        "tests.accounting.assignment.test_authorization_replay_round3::test_missing_invalid_tampered_or_wrong_digest_contract_is_blocked[CREATE TABLE IF NOT EXISTS accounting_authorization_replay_v2 (\\n    replay_key TEXT PRIMARY KEY NOT NULL\\n        CHECK(length(replay_key) = 64 AND replay_key NOT GLOB '*[^0-9a-f]*'),\\n    jti_hash TEXT NOT NULL\\n        CHECK(length(jti_hash) = 64 AND jti_hash NOT GLOB '*[^0-9a-f]*'),\\n    nonce_hash TEXT NOT NULL\\n        CHECK(length(nonce_hash) = 64 AND nonce_hash NOT GLOB '*[^0-9a-f]*'),\\n    tenant_id_hash TEXT NOT NULL\\n        CHECK(length(tenant_id_hash) = 64 AND tenant_id_hash NOT GLOB '*[^0-9a-f]*'),\\n    session_id_hash TEXT NOT NULL\\n        CHECK(length(session_id_hash) = 64 AND session_id_hash NOT GLOB '*[^0-9a-f]*'),\\n    action TEXT NOT NULL CHECK(action IN (\\n        'ASSIGNMENT_CREATE',\\n        'RULE_FUTURE_CREATE',\\n        'RULE_DEACTIVATE',\\n        'RULE_APPLICATION_REVERT',\\n        'QUARANTINE_ROW_RECOMPILE',\\n        'CONFLICT_RESOLVE'\\n    )),\\n    resource_hash TEXT NOT NULL\\n        CHECK(length(resource_hash) = 64 AND resource_hash NOT GLOB '*[^0-9a-f]*'),\\n    policy_digest TEXT NOT NULL\\n        CHECK(length(policy_digest) = 64 AND policy_digest NOT GLOB '*[^0-9a-f]*'),\\n    expires_at INTEGER NOT NULL CHECK(expires_at > 0),\\n    consumed_at INTEGER NOT NULL CHECK(consumed_at > 0),\\n    UNIQUE(jti_hash, nonce_hash, tenant_id_hash, session_id_hash)\\n) STRICT;\\n\\nCREATE INDEX IF NOT EXISTS idx_accounting_authorization_replay_v2_expiry\\nON accounting_authorization_replay_v2(expires_at);\\n\\n-- tampered\\n-b0e11b52b7efd3d74c41fcfb46726312ba442c2dfa7a7a04203f7424342bd729]",
+        "tests.accounting.assignment.test_authorization_replay_round3::test_missing_invalid_tampered_or_wrong_digest_contract_is_blocked[None-b0e11b52b7efd3d74c41fcfb46726312ba442c2dfa7a7a04203f7424342bd729]",
+        "tests.accounting.assignment.test_authorization_replay_round3::test_missing_invalid_tampered_or_wrong_digest_contract_is_blocked[\\xff-b0e11b52b7efd3d74c41fcfb46726312ba442c2dfa7a7a04203f7424342bd729]",
+        "tests.accounting.assignment.test_authorization_replay_round3::test_new_process_after_restart_blocks_same_assertion",
+        "tests.accounting.assignment.test_authorization_replay_round3::test_pinned_ddl_bytes_and_reference_fingerprint_are_stable",
+        "tests.accounting.assignment.test_authorization_replay_round3::test_schema_is_reverified_after_store_construction_and_after_first_consume",
+        "tests.accounting.assignment.test_authorization_replay_round3::test_sixteen_process_barrier_has_exactly_one_winner",
+        "tests.accounting.assignment.test_authorization_replay_round3::test_thirty_two_thread_race_has_one_winner[DELETE]",
+        "tests.accounting.assignment.test_authorization_replay_round3::test_thirty_two_thread_race_has_one_winner[WAL]",
+        "tests.accounting.assignment.test_authorization_wire_round3::test_malformed_and_ambiguous_compact_corpus_is_rejected",
+        "tests.accounting.assignment.test_authorization_wire_round3::test_normative_golden_vector_is_exact_and_schema_valid",
+        "tests.accounting.assignment.test_authorization_wire_round3::test_resource_normalization_and_wildcard_variants_are_rejected",
+        "tests.accounting.assignment.test_authorization_wire_round3::test_wire_constants_do_not_drift_from_contract",
+        "tests.accounting.assignment.test_box5_integration_lock_v2::test_lock_rejects_forged_blob_identity",
+        "tests.accounting.assignment.test_box5_integration_lock_v2::test_lock_rejects_omitted_critical_source",
+        "tests.accounting.assignment.test_box5_integration_lock_v2::test_lock_rejects_submitter_wildcard_allowlist",
+        "tests.accounting.assignment.test_contracts_and_policy_route::test_actual_sidecar_route_graph_contains_complete_accounting_review_api",
+        "tests.accounting.assignment.test_contracts_and_policy_route::test_assign_contract_rejects_caller_evidence[actor_id]",
+        "tests.accounting.assignment.test_contracts_and_policy_route::test_assign_contract_rejects_caller_evidence[bank_adapter_id]",
+        "tests.accounting.assignment.test_contracts_and_policy_route::test_assign_contract_rejects_caller_evidence[descriptor_digest]",
+        "tests.accounting.assignment.test_contracts_and_policy_route::test_assign_contract_rejects_caller_evidence[learned]",
+        "tests.accounting.assignment.test_contracts_and_policy_route::test_assignment_mutations_are_covered_by_central_policy_gate[/v1/accounting/learned-rules/rule_1234567890123456/deactivate]",
+        "tests.accounting.assignment.test_contracts_and_policy_route::test_assignment_mutations_are_covered_by_central_policy_gate[/v1/accounting/rule-conflicts/conflict_1234567890123456/resolve]",
+        "tests.accounting.assignment.test_contracts_and_policy_route::test_assignment_mutations_are_covered_by_central_policy_gate[/v1/accounting/unaccounted/txn_1234567890123456/assign]",
+        "tests.accounting.assignment.test_contracts_and_policy_route::test_bundled_unapproved_registry_and_capability_match_wire_schemas",
+        "tests.accounting.assignment.test_contracts_and_policy_route::test_conflict_problem_extensions_match_wire_schema",
+        "tests.accounting.assignment.test_contracts_and_policy_route::test_integration_lock_matches_schema_and_git_base",
+        "tests.accounting.assignment.test_contracts_and_policy_route::test_malformed_dynamic_path_is_not_treated_as_valid_mutation",
+        "tests.accounting.assignment.test_p0_round2_closure::test_batch_restart_is_fail_closed_and_raw_zero",
+        "tests.accounting.assignment.test_p0_round2_closure::test_bundled_unapproved_overlay_has_zero_assignable",
+        "tests.accounting.assignment.test_p0_round2_closure::test_from_policy_status_gate_toggles_assignable",
+        "tests.accounting.assignment.test_p0_round2_closure::test_ingest_preserves_large_amount_end_to_end",
+        "tests.accounting.assignment.test_p0_round2_closure::test_invalid_date_is_quarantined_not_epoch",
+        "tests.accounting.assignment.test_p0_round2_closure::test_key_provider_markers",
+        "tests.accounting.assignment.test_p0_round2_closure::test_production_runtime_rejects_test_key_provider",
+        "tests.accounting.assignment.test_p0_round2_closure::test_to_amount_preserves_large_integer_beyond_2_pow_53",
+        "tests.accounting.assignment.test_p0_round2_closure::test_to_amount_rejects_float_and_exponent_hazards",
+        "tests.accounting.assignment.test_p0_round2_closure::test_vendor_normalization_version_and_algorithm_are_unified",
+        "tests.accounting.assignment.test_stage3_v3_product::test_backup_failure_prevents_any_product_schema_mutation",
+        "tests.accounting.assignment.test_stage3_v3_product::test_existing_database_is_backed_up_before_stage3_migration_and_retry_is_stable",
+        "tests.accounting.assignment.test_stage3_v3_product::test_existing_weakened_replay_schema_is_not_auto_repaired",
+        "tests.accounting.assignment.test_stage3_v3_product::test_new_product_database_installs_exact_pinned_replay_schema",
+        "tests.accounting.assignment.test_stage3_v3_product::test_nonce_is_bound_to_session_and_single_use",
+        "tests.accounting.assignment.test_stage3_v3_product::test_quarantine_recompile_creates_reviewable_transaction",
+        "tests.accounting.assignment.test_stage3_v3_product::test_row_conservation_and_content_duplicate_detection",
+        "tests.accounting.assignment.test_stage3_v3_product::test_six_versioned_bank_adapters_reach_product_projection[kr.hana.statement-row5]",
+        "tests.accounting.assignment.test_stage3_v3_product::test_six_versioned_bank_adapters_reach_product_projection[kr.ibk.statement-row1]",
+        "tests.accounting.assignment.test_stage3_v3_product::test_six_versioned_bank_adapters_reach_product_projection[kr.kb.statement-row0]",
+        "tests.accounting.assignment.test_stage3_v3_product::test_six_versioned_bank_adapters_reach_product_projection[kr.nh.statement-row2]",
+        "tests.accounting.assignment.test_stage3_v3_product::test_six_versioned_bank_adapters_reach_product_projection[kr.shinhan.statement-row3]",
+        "tests.accounting.assignment.test_stage3_v3_product::test_six_versioned_bank_adapters_reach_product_projection[kr.woori.statement-row4]",
+        "tests.auth.test_capability_token::test_post_invalid_token_403_contract",
+        "tests.auth.test_capability_token::test_post_no_token_401_contract",
+        "tests.auth.test_capability_token::test_post_valid_token_200_contract",
+        "tests.auth.test_capability_token::test_protected_paths_no_token_returns_401[GET-/api/egress/report]",
+        "tests.auth.test_capability_token::test_protected_paths_no_token_returns_401[GET-/v1/home/bootstrap-status]",
+        "tests.auth.test_capability_token::test_protected_paths_no_token_returns_401[GET-/v1/home/snapshot]",
+        "tests.auth.test_capability_token::test_public_paths_no_token_not_401[GET-/api/model/status]",
+        "tests.auth.test_capability_token::test_public_paths_no_token_not_401[GET-/api/sidecar/health]",
+        "tests.auth.test_capability_token::test_public_paths_no_token_not_401[GET-/health]",
+        "tests.auth.test_capability_token::test_token_file_chmod_600",
+        "tests.auth.test_capability_token::test_token_file_missing_does_not_raise",
+        "tests.auth.test_capability_token::test_token_file_unreadable_payload_classifies_invalid",
+        "tests.auth.test_capability_token::test_token_file_unreadable_raises_capability_token_error",
+        "tests.company_policy.test_role_registry_routes::test_bootstrap_once_target_self_only_then_status_requires_registered_admin",
+        "tests.company_policy.test_role_registry_routes::test_member_upsert_remove_and_last_admin_block",
+        "tests.company_policy.test_role_registry_routes::test_status_fails_closed_for_corrupted_index",
+        "tests.company_policy.test_role_registry_routes::test_status_fails_closed_when_populated_audit_files_are_missing",
+        "tests.company_policy.test_role_registry_routes::test_status_requires_token_and_prebootstrap_base_admin",
+        "tests.company_policy.test_role_registry_routes::test_unregistered_admin_cannot_mutate_members",
+        "tests.company_policy.test_role_registry_store::test_bootstrap_self_admin_once_and_lookup_active",
+        "tests.company_policy.test_role_registry_store::test_concurrent_bootstrap_has_single_winner",
+        "tests.company_policy.test_role_registry_store::test_index_and_audit_do_not_persist_raw_identity",
+        "tests.company_policy.test_role_registry_store::test_malformed_vault_entry_is_wrapped_as_registry_load_failure",
+        "tests.company_policy.test_role_registry_store::test_populated_registry_blocks_when_audit_files_are_missing",
+        "tests.company_policy.test_role_registry_store::test_upsert_remove_and_last_admin_projection",
+        "tests.firstscreen_trusted.test_trusted_junit_semantics_box5::test_box5_evidence_verifier_blocks_test_count_regression",
+        "tests.firstscreen_trusted.test_trusted_junit_semantics_box5::test_box5_evidence_verifier_requires_raw_digest_and_protected_minimum",
+        "tests.firstscreen_trusted.test_trusted_junit_semantics_box5::test_trusted_parser_accepts_semantically_consistent_raw_junit",
+        "tests.firstscreen_trusted.test_trusted_junit_semantics_box5::test_trusted_parser_blocks_semantic_forgery[<!DOCTYPE x [<!ENTITY leak SYSTEM \"file:///etc/passwd\">]><testsuite name=\"x\" tests=\"0\" failures=\"0\" errors=\"0\" skipped=\"0\"/>-JUNIT_DTD_OR_ENTITY_FORBIDDEN]",
+        "tests.firstscreen_trusted.test_trusted_junit_semantics_box5::test_trusted_parser_blocks_semantic_forgery[<testsuites tests=\"1\" failures=\"0\" errors=\"0\" skipped=\"0\"><testsuite name=\"box5\" tests=\"1\" failures=\"0\" errors=\"0\" skipped=\"0\"><testcase classname=\"box5.authorization\" name=\"deny\"><failure/></testcase></testsuite></testsuites>-JUNIT_SUITE_COUNT_MISMATCH]",
+        "tests.firstscreen_trusted.test_trusted_junit_semantics_box5::test_trusted_parser_blocks_semantic_forgery[<testsuites tests=\"2\" failures=\"0\" errors=\"0\" skipped=\"0\"><testsuite name=\"box5\" tests=\"2\" failures=\"0\" errors=\"0\" skipped=\"0\"><testcase classname=\"box5.authorization\" name=\"allow\"/><testcase classname=\"box5.authorization\" name=\"allow\"/></testsuite></testsuites>-JUNIT_DUPLICATE_TESTCASE]",
+        "tests.firstscreen_trusted.test_trusted_junit_semantics_box5::test_trusted_parser_blocks_semantic_forgery[<testsuites tests=\"2\" failures=\"0\" errors=\"0\" skipped=\"0\"><testsuite name=\"same\" tests=\"1\" failures=\"0\" errors=\"0\" skipped=\"0\"><testcase classname=\"box5.authorization\" name=\"allow\"/></testsuite><testsuite name=\"same\" tests=\"1\" failures=\"0\" errors=\"0\" skipped=\"0\"><testcase classname=\"x\" name=\"b\"/></testsuite></testsuites>-JUNIT_DUPLICATE_OR_EMPTY_SUITE_IDENTITY]"
+      ],
+      "parser": "pytest-junit-pass-v2",
+      "required": true,
+      "result_path": "junit/0002.xml",
+      "run_id": "frozen-python"
+    },
+    {
+      "argv": [
+        "npm",
+        "test",
+        "--",
+        "--run"
+      ],
+      "canonical_result_path": "",
+      "cwd": "candidate/butler-desktop",
+      "expected_testcase_ids": [],
+      "parser": "exit-code-only-v1",
+      "required": true,
+      "result_path": "",
+      "run_id": "desktop-vitest"
+    },
+    {
+      "argv": [
+        "cargo",
+        "test",
+        "--lib",
+        "--quiet"
+      ],
+      "canonical_result_path": "",
+      "cwd": "candidate/butler-desktop/src-tauri",
+      "expected_testcase_ids": [],
+      "parser": "exit-code-only-v1",
+      "required": true,
+      "result_path": "",
+      "run_id": "tauri-rust-lib"
+    },
+    {
+      "argv": [
+        "python3",
+        "scripts/verify_box5_integration_lock.py",
+        "--allow-worktree-base"
+      ],
+      "canonical_result_path": "",
+      "cwd": "candidate",
+      "expected_testcase_ids": [],
+      "parser": "exit-code-only-v1",
+      "required": true,
+      "result_path": "",
+      "run_id": "integration-lock"
+    }
+  ],
+  "schema_version": "butler.box5.ac23-evidence-policy.v3"
+}

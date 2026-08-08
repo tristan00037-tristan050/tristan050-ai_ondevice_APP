@@ -38,6 +38,16 @@ def _runtime(tmp_path: Path) -> AccountingReviewRuntime:
     )
 
 
+def _ingest(runtime: AccountingReviewRuntime, batch_id: str, frame):
+    return runtime.ingest_dataframe(
+        batch_id,
+        frame,
+        _profile(),
+        source_file_sha256=__import__("hashlib").sha256(batch_id.encode()).hexdigest(),
+        adapter_id="kr.ibk.statement",
+    )
+
+
 # ── RI-P0-003/011: float 금액 완전 제거 ──────────────────────────────────
 
 def _amt(value: object):
@@ -62,8 +72,8 @@ def test_to_amount_rejects_float_and_exponent_hazards():
 
 def test_ingest_preserves_large_amount_end_to_end(tmp_path: Path):
     runtime = _runtime(tmp_path)
-    frame = pd.DataFrame([{"거래일": "2026-07-16", "거래내용": "큰금액", "금액": "-9007199254740993", "분류과목": "미분류"}])
-    runtime.ingest_dataframe("batch_bigmoney_0001", frame, _profile())
+    frame = pd.DataFrame([{"거래일시": "2026-07-16", "상대계좌예금주명": "큰금액", "금액": "-9007199254740993", "분류과목": "미분류"}])
+    _ingest(runtime, "batch_bigmoney_0001", frame)
     context = runtime.context_from_profile(_profile())
     page = runtime.unaccounted_page(context, "batch_bigmoney_0001", cursor=None, page_size=50)
     assert page["items"][0]["money"]["minor_units"] == -9007199254740993
@@ -75,11 +85,11 @@ def test_invalid_date_is_quarantined_not_epoch(tmp_path: Path):
     runtime = _runtime(tmp_path)
     frame = pd.DataFrame(
         [
-            {"거래일": "not-a-date", "거래내용": "깨진날짜", "금액": "-1000", "분류과목": "미분류"},
-            {"거래일": "2026-07-16", "거래내용": "정상", "금액": "-2000", "분류과목": "미분류"},
+            {"거래일시": "not-a-date", "상대계좌예금주명": "깨진날짜", "금액": "-1000", "분류과목": "미분류"},
+            {"거래일시": "2026-07-16", "상대계좌예금주명": "정상", "금액": "-2000", "분류과목": "미분류"},
         ]
     )
-    result = runtime.ingest_dataframe("batch_baddate_00001", frame, _profile())
+    result = _ingest(runtime, "batch_baddate_00001", frame)
     assert result["quarantine_count"] == 1
     context = runtime.context_from_profile(_profile())
     page = runtime.unaccounted_page(context, "batch_baddate_00001", cursor=None, page_size=50)
@@ -124,12 +134,14 @@ def test_from_policy_status_gate_toggles_assignable():
 # ── RI-P0-006/015: 제품 키 provider 는 macOS Keychain only ────────────────
 
 def test_key_provider_markers():
-    assert MacOSKeychainStore().is_production_provider is True
+    # The /usr/bin/security compatibility path exposes key bytes to Python and
+    # must remain blocked until the native authority is provisioned and tested.
+    assert MacOSKeychainStore().is_production_provider is False
     assert MemoryKeyStore().is_production_provider is False
 
 
 def test_production_runtime_rejects_test_key_provider(tmp_path: Path):
-    with pytest.raises(AssignmentError, match="SECURE_KEY_PROVIDER_NOT_PRODUCTION"):
+    with pytest.raises(AssignmentError, match="BLOCKED_KEY_AUTHORITY"):
         AccountingReviewRuntime.for_production(
             db_path=tmp_path / "prod.sqlite3",
             key_store=MemoryKeyStore(key=b"a" * 32),
@@ -175,18 +187,18 @@ def test_batch_restart_is_fail_closed_and_raw_zero(tmp_path: Path):
         return AccountingReviewRuntime(db_path=db, key_store=MemoryKeyStore(key=b"a" * 32), registry=registry)
 
     r1 = make()
-    r1.ingest_dataframe(
+    _ingest(r1,
         "batch_restart_00001",
-        pd.DataFrame([{"거래일": "2026-07-16", "거래내용": "비밀상호원문", "금액": "-1000", "분류과목": "미분류"}]),
-        _profile(),
+        pd.DataFrame([{"거래일시": "2026-07-16", "상대계좌예금주명": "비밀상호원문", "금액": "-1000", "분류과목": "미분류"}]),
     )
     context = r1.context_from_profile(_profile())
     assert r1.unaccounted_page(context, "batch_restart_00001", cursor=None, page_size=50)["total_count"] == 1
 
-    # 재시작: 새 인스턴스, 같은 DB. 아직 durable 복구가 없으므로 조회는 fail-closed(404)다.
+    # 재시작: 새 인스턴스가 raw 없이 durable projection을 복구한다.
     r2 = make()
-    with pytest.raises(AssignmentError, match="AUTHORIZATION_DENIED"):
-        r2.unaccounted_page(context, "batch_restart_00001", cursor=None, page_size=50)
+    restarted = r2.unaccounted_page(context, "batch_restart_00001", cursor=None, page_size=50)
+    assert restarted["total_count"] == 1
+    assert restarted["items"][0]["descriptor_display"] == "거래처 정보 비공개"
 
     # ★ 어떤 경우에도 raw 거래원문은 디스크(DB)에 유출되지 않는다(§15 절대불변).
     if db.exists():

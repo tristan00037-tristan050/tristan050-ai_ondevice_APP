@@ -28,11 +28,23 @@ fn main() {
     println!("cargo:rerun-if-env-changed=BUTLER_HELPER1_EXECUTION_PUBLIC_KEY_SHA256");
     println!("cargo:rerun-if-env-changed=BUTLER_SOURCE_COMMIT_OID");
     println!("cargo:rerun-if-env-changed=BUTLER_SOURCE_TREE_OID");
+    println!("cargo:rerun-if-env-changed=BUTLER_BOX5_PRODUCTION_AUTHORITY_BUILD");
+    println!("cargo:rerun-if-env-changed=BUTLER_BOX5_APPROVED_TRUST_POLICY_SHA256");
     let release = std::env::var("PROFILE").as_deref() == Ok("release");
     // 배포 빌드 여부는 명시 플래그로만 켠다. 기본값은 내부 빌드다.
     // 근거: 대표 결정(2026-07-23) — 앱 배포 위변조 방지 체계는 배포 개시 전으로 이월.
     // root bootstrap anchor 는 그 이월된 owner root 키 세리머니의 산출물이라 아직 존재하지 않는다.
     let distribution = distribution_flag::release_distribution_from_env();
+    if distribution {
+        if std::env::var("BUTLER_BOX5_PRODUCTION_AUTHORITY_BUILD").as_deref() != Ok("1") {
+            panic!("BLOCK_APPROVED_PRODUCTION_TRUST_POLICY_UNAVAILABLE");
+        }
+        let box5_policy_digest =
+            std::env::var("BUTLER_BOX5_APPROVED_TRUST_POLICY_SHA256").unwrap_or_default();
+        if !build_gate::is_lower_hex(&box5_policy_digest, 64) {
+            panic!("BLOCK_APPROVED_PRODUCTION_TRUST_POLICY_UNAVAILABLE");
+        }
+    }
     let source_commit = std::env::var("BUTLER_SOURCE_COMMIT_OID")
         .ok()
         .or_else(|| (!release).then(|| git_identity("HEAD")).flatten());

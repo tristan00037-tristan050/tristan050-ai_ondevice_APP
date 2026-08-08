@@ -11,6 +11,7 @@ from butler_pc_core.accounting.assignment.domain import AssignCommand, Assignmen
 from butler_pc_core.accounting.assignment.runtime import AccountingReviewRuntime
 from butler_pc_core.accounting.assignment.security import MemoryKeyStore
 from butler_pc_core.company_policy.middleware import _route_operation, DEFAULT_ROUTE_OPERATION
+from scripts.verify_box5_integration_lock import verify as verify_integration_lock
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -21,8 +22,11 @@ def test_integration_lock_matches_schema_and_git_base():
     lock = json.loads((ROOT / "integration_lock.json").read_text(encoding="utf-8"))
     schema = json.loads((CONTRACTS / "integration_lock.schema.json").read_text(encoding="utf-8"))
     jsonschema.Draft202012Validator(schema, format_checker=jsonschema.FormatChecker()).validate(lock)
-    assert lock["base_commit"] == "55d0f315e2b375d58c9c2a0263b606e5a757b59e"
-    assert lock["base_tree"] == "9d21d32bca294bc9998253f7d1c2f6f88ad71114"
+    verification = verify_integration_lock(allow_worktree_base=True)
+    assert verification["base_commit"] == lock["approved_base_commit"]
+    assert verification["base_tree"] == lock["approved_base_tree"]
+    assert verification["critical_manifest_sha256"] == lock["critical_manifest_sha256"]
+    assert isinstance(verification["candidate_only"], bool)
 
 
 @pytest.mark.parametrize("forged", ["descriptor_digest", "bank_adapter_id", "learned", "actor_id"])

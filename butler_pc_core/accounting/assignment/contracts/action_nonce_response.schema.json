@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/schemas/accounting/action-nonce-response-3.0.json",
+  "title": "Authenticated single-use accounting action nonce",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "transaction_id", "action", "user_action_nonce", "expires_at_epoch_ms"],
+  "properties": {
+    "schema_version": {"const": "3.0"},
+    "transaction_id": {"type": "string", "format": "uuid"},
+    "action": {"enum": ["ASSIGNMENT_CREATE", "RULE_FUTURE_CREATE"]},
+    "user_action_nonce": {"type": "string", "pattern": "^[A-Za-z0-9_-]{32,128}$"},
+    "expires_at_epoch_ms": {"type": "integer", "minimum": 1, "maximum": 9007199254740991}
+  }
+}

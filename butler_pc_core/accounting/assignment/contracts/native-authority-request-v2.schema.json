@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.invalid/schemas/native-authority-request-v2.schema.json",
+  "title": "Box5 Native Human Authority Request v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "request_nonce", "action", "resource", "body_sha256", "session_binding_sha256"],
+  "properties": {
+    "schema_version": {"const": "2.0"},
+    "request_nonce": {"type": "string", "pattern": "^[A-Za-z0-9_-]{22,86}$"},
+    "action": {"enum": ["ASSIGNMENT_CREATE", "RULE_FUTURE_CREATE", "RULE_DEACTIVATE", "RULE_APPLICATION_REVERT", "QUARANTINE_ROW_RECOMPILE", "CONFLICT_RESOLVE"]},
+    "resource": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$"},
+    "body_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "session_binding_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

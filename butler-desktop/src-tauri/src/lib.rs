@@ -2,11 +2,12 @@ use std::{
     collections::HashMap,
     env,
     fs::{self, OpenOptions},
-    io::Write,
-    path::PathBuf,
-    process::Command,
+    io::{Read, Write},
+    net::{SocketAddr, TcpStream},
+    path::{Path, PathBuf},
+    process::{Command, Stdio},
     sync::Mutex,
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tauri::Manager;
 use tauri_plugin_shell::{
@@ -547,6 +548,584 @@ fn get_sidecar_capability_token(app: tauri::AppHandle) -> Result<String, String>
     Ok(trimmed)
 }
 
+#[derive(Clone, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Box5AuthorizedRequest {
+    action: String,
+    route_selector: String,
+    resource_id: String,
+    parent_resource_id: Option<String>,
+    body_json: Option<String>,
+    idempotency_key: Option<String>,
+    if_match_version: Option<u64>,
+}
+
+#[derive(Debug)]
+struct CompiledBox5Route {
+    action: String,
+    resource: String,
+    path: String,
+    body: Vec<u8>,
+    idempotency_key: Option<String>,
+    if_match_version: Option<u64>,
+}
+
+#[derive(serde::Serialize)]
+struct Box5AuthorityRequest<'a> {
+    schema_version: &'static str,
+    request_nonce: &'a str,
+    action: &'a str,
+    resource: &'a str,
+    body_sha256: String,
+    session_binding_sha256: String,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Box5AuthorityResponse {
+    schema_version: String,
+    request_nonce: String,
+    assertion: String,
+    expires_at: u64,
+}
+
+#[derive(serde::Serialize)]
+struct Box5RendererResponse {
+    status: u16,
+    content_type: String,
+    body: String,
+}
+
+struct Box5Secret(String);
+
+impl std::fmt::Debug for Box5Secret {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("[REDACTED]")
+    }
+}
+
+impl Drop for Box5Secret {
+    fn drop(&mut self) {
+        // SAFETY: bytes are only overwritten in place and the String length and
+        // UTF-8 validity (zero bytes are valid UTF-8) remain unchanged.
+        unsafe { self.0.as_bytes_mut().fill(0) }
+    }
+}
+
+fn box5_safe_identifier(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 128
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+}
+
+fn compile_box5_route(request: &Box5AuthorizedRequest) -> Result<CompiledBox5Route, String> {
+    if !box5_safe_identifier(&request.resource_id)
+        || request
+            .parent_resource_id
+            .as_deref()
+            .is_some_and(|value| !box5_safe_identifier(value))
+        || request.idempotency_key.as_deref().is_some_and(|value| {
+            value.len() < 8
+                || value.len() > 128
+                || !value.bytes().all(|byte| {
+                    byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b':' | b'-')
+                })
+        })
+        || request.if_match_version == Some(0)
+    {
+        return Err("BOX5_INTENT_INVALID".to_string());
+    }
+    let (resource_type, path, body_required, mutation_headers) =
+        match (request.action.as_str(), request.route_selector.as_str()) {
+            ("ASSIGNMENT_CREATE", "ACTION_NONCE_THIS_ONLY") => (
+                "ACCOUNTING_TRANSACTION",
+                format!(
+                    "/v1/accounting/unaccounted/{}/action-nonce?scope=THIS_ONLY",
+                    request.resource_id
+                ),
+                false,
+                false,
+            ),
+            ("RULE_FUTURE_CREATE", "ACTION_NONCE_FUTURE") => (
+                "ACCOUNTING_TRANSACTION",
+                format!(
+                    "/v1/accounting/unaccounted/{}/action-nonce?scope=SAME_VENDOR_FUTURE",
+                    request.resource_id
+                ),
+                false,
+                false,
+            ),
+            ("ASSIGNMENT_CREATE" | "RULE_FUTURE_CREATE", "ASSIGNMENT_MUTATION") => (
+                "ACCOUNTING_TRANSACTION",
+                format!("/v1/accounting/unaccounted/{}/assign", request.resource_id),
+                true,
+                true,
+            ),
+            ("RULE_DEACTIVATE", "RULE_DEACTIVATE") => (
+                "LEARNED_RULE",
+                format!(
+                    "/v1/accounting/learned-rules/{}/deactivate",
+                    request.resource_id
+                ),
+                false,
+                true,
+            ),
+            ("RULE_APPLICATION_REVERT", "RULE_APPLICATION_REVERT") => (
+                "ACCOUNTING_TRANSACTION",
+                format!(
+                    "/v1/accounting/review/transactions/{}/rule-application/revert",
+                    request.resource_id
+                ),
+                false,
+                true,
+            ),
+            ("QUARANTINE_ROW_RECOMPILE", "QUARANTINE_ROW_RECOMPILE") => {
+                let batch = request
+                    .parent_resource_id
+                    .as_deref()
+                    .ok_or_else(|| "BOX5_RESOURCE_BINDING_INVALID".to_string())?;
+                (
+                    "QUARANTINED_ROW",
+                    format!(
+                        "/v1/accounting/review/batches/{}/quarantine/{}/recompile",
+                        batch, request.resource_id
+                    ),
+                    true,
+                    true,
+                )
+            }
+            ("CONFLICT_RESOLVE", "CONFLICT_RESOLVE") => (
+                "RULE_CONFLICT",
+                format!(
+                    "/v1/accounting/rule-conflicts/{}/resolve",
+                    request.resource_id
+                ),
+                true,
+                true,
+            ),
+            _ => return Err("BOX5_RESOURCE_BINDING_INVALID".to_string()),
+        };
+    if mutation_headers != (request.idempotency_key.is_some() && request.if_match_version.is_some())
+        || (!mutation_headers
+            && (request.idempotency_key.is_some() || request.if_match_version.is_some()))
+        || body_required != request.body_json.is_some()
+    {
+        return Err("BOX5_INTENT_INVALID".to_string());
+    }
+    let body = request
+        .body_json
+        .as_deref()
+        .map(str::as_bytes)
+        .unwrap_or_default();
+    if body.len() > 1_048_576 {
+        return Err("BOX5_BODY_SIZE_INVALID".to_string());
+    }
+    if !body.is_empty() {
+        let parsed: serde_json::Value =
+            serde_json::from_slice(body).map_err(|_| "BOX5_BODY_JSON_INVALID".to_string())?;
+        if !parsed.is_object() {
+            return Err("BOX5_BODY_JSON_INVALID".to_string());
+        }
+    }
+    Ok(CompiledBox5Route {
+        action: request.action.clone(),
+        resource: format!("{}:{}", resource_type, request.resource_id),
+        path,
+        body: body.to_vec(),
+        idempotency_key: request.idempotency_key.clone(),
+        if_match_version: request.if_match_version,
+    })
+}
+
+fn box5_random_nonce() -> Result<String, String> {
+    use base64::Engine;
+    use ring::rand::{SecureRandom, SystemRandom};
+
+    let mut bytes = [0_u8; 24];
+    SystemRandom::new()
+        .fill(&mut bytes)
+        .map_err(|_| "BLOCK_NATIVE_RANDOM_UNAVAILABLE".to_string())?;
+    Ok(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes))
+}
+
+fn hex_sha256(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+
+    format!("{:x}", Sha256::digest(bytes))
+}
+
+fn box5_verify_helper(helper: &Path) -> Result<(), String> {
+    let metadata =
+        fs::symlink_metadata(helper).map_err(|_| "BLOCK_HUMAN_AUTHORITY_UNRESOLVED".to_string())?;
+    if metadata.file_type().is_symlink() || !metadata.is_file() {
+        return Err("BLOCK_HUMAN_AUTHORITY_UNRESOLVED".to_string());
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if metadata.permissions().mode() & 0o111 == 0 {
+            return Err("BLOCK_HUMAN_AUTHORITY_UNRESOLVED".to_string());
+        }
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let verified = Command::new("/usr/bin/codesign")
+            .args(["--verify", "--strict", "--verbose=2"])
+            .arg(helper)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .map_err(|_| "BLOCK_HUMAN_AUTHORITY_UNRESOLVED".to_string())?;
+        if !verified.success() {
+            return Err("BLOCK_HUMAN_AUTHORITY_UNRESOLVED".to_string());
+        }
+        let identity = Command::new("/usr/bin/codesign")
+            .args(["-d", "--verbose=4"])
+            .arg(helper)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .output()
+            .map_err(|_| "BLOCK_HUMAN_AUTHORITY_UNRESOLVED".to_string())?;
+        let details = String::from_utf8(identity.stderr)
+            .map_err(|_| "BLOCK_HUMAN_AUTHORITY_UNRESOLVED".to_string())?;
+        if !identity.status.success()
+            || !details
+                .lines()
+                .any(|line| line == "Identifier=com.butler.box5.user-authority.v2")
+        {
+            return Err("BLOCK_HUMAN_AUTHORITY_UNRESOLVED".to_string());
+        }
+        Ok(())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("BLOCK_MACOS_NATIVE_AUTHORITY_REQUIRED".to_string())
+    }
+}
+
+fn box5_issue_assertion(
+    helper: &Path,
+    route: &CompiledBox5Route,
+    session_binding_sha256: &str,
+) -> Result<Box5Secret, String> {
+    box5_verify_helper(helper)?;
+    let request_nonce = box5_random_nonce()?;
+    let request = Box5AuthorityRequest {
+        schema_version: "2.0",
+        request_nonce: &request_nonce,
+        action: &route.action,
+        resource: &route.resource,
+        body_sha256: hex_sha256(&route.body),
+        session_binding_sha256: session_binding_sha256.to_string(),
+    };
+    let mut wire =
+        serde_json::to_vec(&request).map_err(|_| "BLOCK_NATIVE_AUTHORITY_PROTOCOL".to_string())?;
+    wire.push(b'\n');
+    let mut child = Command::new(helper)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|_| "BLOCK_HUMAN_AUTHORITY_UNRESOLVED".to_string())?;
+    let mut stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| "BLOCK_NATIVE_AUTHORITY_PROTOCOL".to_string())?;
+    stdin
+        .write_all(&wire)
+        .map_err(|_| "BLOCK_NATIVE_AUTHORITY_PROTOCOL".to_string())?;
+    wire.fill(0);
+    drop(stdin);
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| "BLOCK_NATIVE_AUTHORITY_PROTOCOL".to_string())?;
+    let output_reader = std::thread::spawn(move || {
+        let mut output = Vec::new();
+        stdout.take(16_385).read_to_end(&mut output).map(|_| output)
+    });
+    // The helper may present macOS device-owner authentication. Keep this
+    // bounded, but allow a human a realistic approval window.
+    let deadline = Instant::now() + Duration::from_secs(30);
+    let status = loop {
+        if let Some(status) = child
+            .try_wait()
+            .map_err(|_| "BLOCK_NATIVE_AUTHORITY_PROTOCOL".to_string())?
+        {
+            break status;
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err("BLOCK_NATIVE_AUTHORITY_TIMEOUT".to_string());
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    };
+    let output = output_reader
+        .join()
+        .map_err(|_| "BLOCK_NATIVE_AUTHORITY_PROTOCOL".to_string())?
+        .map_err(|_| "BLOCK_NATIVE_AUTHORITY_PROTOCOL".to_string())?;
+    if !status.success() || output.is_empty() || output.len() > 16_384 {
+        return Err("BLOCK_HUMAN_AUTHORITY_UNRESOLVED".to_string());
+    }
+    let text =
+        std::str::from_utf8(&output).map_err(|_| "BLOCK_NATIVE_AUTHORITY_PROTOCOL".to_string())?;
+    if text.trim_end_matches('\n').contains('\n') {
+        return Err("BLOCK_NATIVE_AUTHORITY_PROTOCOL".to_string());
+    }
+    let response: Box5AuthorityResponse = serde_json::from_str(text.trim_end())
+        .map_err(|_| "BLOCK_NATIVE_AUTHORITY_PROTOCOL".to_string())?;
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| "BLOCK_NATIVE_CLOCK_INVALID".to_string())?
+        .as_secs();
+    if response.schema_version != "2.0"
+        || response.request_nonce != request_nonce
+        || response.expires_at <= now
+        || response.expires_at > now + 300
+        || response.assertion.len() > 16_384
+        || response.assertion.split('.').count() != 3
+        || response
+            .assertion
+            .bytes()
+            .any(|byte| !byte.is_ascii() || byte.is_ascii_whitespace())
+    {
+        return Err("BLOCK_NATIVE_AUTHORITY_PROTOCOL".to_string());
+    }
+    Ok(Box5Secret(response.assertion))
+}
+
+fn box5_read_capability_token(path: &Path) -> Result<Box5Secret, String> {
+    let metadata =
+        fs::symlink_metadata(path).map_err(|_| "CAPABILITY_TOKEN_UNAVAILABLE".to_string())?;
+    if metadata.file_type().is_symlink() || !metadata.is_file() {
+        return Err("CAPABILITY_TOKEN_TYPE_INVALID".to_string());
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if metadata.permissions().mode() & 0o777 != 0o600 {
+            return Err("CAPABILITY_TOKEN_MODE_INVALID".to_string());
+        }
+    }
+    let token = fs::read_to_string(path)
+        .map_err(|_| "CAPABILITY_TOKEN_UNAVAILABLE".to_string())?
+        .trim()
+        .to_string();
+    if token.is_empty()
+        || token.len() > 256
+        || token
+            .bytes()
+            .any(|byte| !byte.is_ascii() || byte.is_ascii_whitespace())
+    {
+        return Err("CAPABILITY_TOKEN_INVALID".to_string());
+    }
+    Ok(Box5Secret(token))
+}
+
+fn box5_send_loopback(
+    route: &CompiledBox5Route,
+    token: &Box5Secret,
+    assertion: &Box5Secret,
+) -> Result<Box5RendererResponse, String> {
+    let address: SocketAddr = "127.0.0.1:8765"
+        .parse()
+        .map_err(|_| "BLOCK_LOOPBACK_TARGET_INVALID".to_string())?;
+    let mut stream = TcpStream::connect_timeout(&address, Duration::from_secs(2))
+        .map_err(|_| "BLOCK_LOOPBACK_UNAVAILABLE".to_string())?;
+    stream
+        .set_read_timeout(Some(Duration::from_secs(10)))
+        .map_err(|_| "BLOCK_LOOPBACK_UNAVAILABLE".to_string())?;
+    stream
+        .set_write_timeout(Some(Duration::from_secs(5)))
+        .map_err(|_| "BLOCK_LOOPBACK_UNAVAILABLE".to_string())?;
+    let mut request = format!(
+        "POST {} HTTP/1.1\r\nHost: 127.0.0.1:8765\r\nConnection: close\r\nAccept: application/json, application/problem+json\r\nAuthorization: Bearer {}\r\nButler-User-Authorization: {}\r\nContent-Length: {}\r\n",
+        route.path,
+        token.0,
+        assertion.0,
+        route.body.len()
+    );
+    if !route.body.is_empty() {
+        request.push_str("Content-Type: application/json\r\n");
+    }
+    if let Some(key) = &route.idempotency_key {
+        request.push_str(&format!("Idempotency-Key: {}\r\n", key));
+    }
+    if let Some(version) = route.if_match_version {
+        request.push_str(&format!("If-Match: W/\"{}\"\r\n", version));
+    }
+    request.push_str("\r\n");
+    stream
+        .write_all(request.as_bytes())
+        .and_then(|_| stream.write_all(&route.body))
+        .map_err(|_| "BLOCK_LOOPBACK_UNAVAILABLE".to_string())?;
+    unsafe { request.as_bytes_mut().fill(0) }
+    let mut response = Vec::new();
+    stream
+        .take(1_065_000)
+        .read_to_end(&mut response)
+        .map_err(|_| "BLOCK_LOOPBACK_RESPONSE_INVALID".to_string())?;
+    if response.len() >= 1_065_000 {
+        return Err("BLOCK_LOOPBACK_RESPONSE_TOO_LARGE".to_string());
+    }
+    let separator = response
+        .windows(4)
+        .position(|window| window == b"\r\n\r\n")
+        .ok_or_else(|| "BLOCK_LOOPBACK_RESPONSE_INVALID".to_string())?;
+    let header = std::str::from_utf8(&response[..separator])
+        .map_err(|_| "BLOCK_LOOPBACK_RESPONSE_INVALID".to_string())?;
+    let mut lines = header.split("\r\n");
+    let status_line = lines
+        .next()
+        .ok_or_else(|| "BLOCK_LOOPBACK_RESPONSE_INVALID".to_string())?;
+    let mut status_parts = status_line.split_ascii_whitespace();
+    if status_parts.next() != Some("HTTP/1.1") {
+        return Err("BLOCK_LOOPBACK_RESPONSE_INVALID".to_string());
+    }
+    let status: u16 = status_parts
+        .next()
+        .and_then(|value| value.parse().ok())
+        .filter(|value| (100..=599).contains(value))
+        .ok_or_else(|| "BLOCK_LOOPBACK_RESPONSE_INVALID".to_string())?;
+    if (300..400).contains(&status) {
+        return Err("BLOCK_LOOPBACK_REDIRECT_FORBIDDEN".to_string());
+    }
+    let mut content_type: Option<String> = None;
+    let mut content_length: Option<usize> = None;
+    for line in lines {
+        let (name, value) = line
+            .split_once(':')
+            .ok_or_else(|| "BLOCK_LOOPBACK_RESPONSE_INVALID".to_string())?;
+        let value = value.trim();
+        if name.eq_ignore_ascii_case("content-type") {
+            if content_type.is_some() {
+                return Err("BLOCK_LOOPBACK_RESPONSE_INVALID".to_string());
+            }
+            content_type = Some(value.to_ascii_lowercase());
+        } else if name.eq_ignore_ascii_case("content-length") {
+            if content_length.is_some() {
+                return Err("BLOCK_LOOPBACK_RESPONSE_INVALID".to_string());
+            }
+            content_length = Some(
+                value
+                    .parse()
+                    .map_err(|_| "BLOCK_LOOPBACK_RESPONSE_INVALID".to_string())?,
+            );
+        } else if name.eq_ignore_ascii_case("transfer-encoding") {
+            return Err("BLOCK_LOOPBACK_TRANSFER_ENCODING_FORBIDDEN".to_string());
+        }
+    }
+    let content_type = content_type
+        .filter(|value| value == "application/json" || value == "application/problem+json")
+        .ok_or_else(|| "BLOCK_LOOPBACK_CONTENT_TYPE_INVALID".to_string())?;
+    let body = &response[separator + 4..];
+    if body.len() > 1_048_576 || content_length != Some(body.len()) {
+        return Err("BLOCK_LOOPBACK_RESPONSE_INVALID".to_string());
+    }
+    let body = String::from_utf8(body.to_vec())
+        .map_err(|_| "BLOCK_LOOPBACK_RESPONSE_INVALID".to_string())?;
+    Ok(Box5RendererResponse {
+        status,
+        content_type,
+        body,
+    })
+}
+
+fn execute_box5_authorized_request(
+    token_path: PathBuf,
+    helper_path: PathBuf,
+    request: Box5AuthorizedRequest,
+) -> Result<Box5RendererResponse, String> {
+    let route = compile_box5_route(&request)?;
+    let token = box5_read_capability_token(&token_path)?;
+    let session_binding_sha256 = hex_sha256(token.0.as_bytes());
+    let assertion = box5_issue_assertion(&helper_path, &route, &session_binding_sha256)?;
+    box5_send_loopback(&route, &token, &assertion)
+}
+
+#[tauri::command]
+async fn box5_authorized_request(
+    app: tauri::AppHandle,
+    request: Box5AuthorizedRequest,
+) -> Result<Box5RendererResponse, String> {
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "APP_DATA_DIR_UNAVAILABLE".to_string())?;
+    let resources = app
+        .path()
+        .resource_dir()
+        .map_err(|_| "BLOCK_HUMAN_AUTHORITY_UNRESOLVED".to_string())?;
+    let token_path = app_data.join("ipc").join("sidecar.capability");
+    let helper_path = resources.join("box5").join("Box5UserAuthority");
+    tauri::async_runtime::spawn_blocking(move || {
+        execute_box5_authorized_request(token_path, helper_path, request)
+    })
+    .await
+    .map_err(|_| "BLOCK_NATIVE_AUTHORITY_RUNTIME".to_string())?
+}
+
+#[cfg(test)]
+mod box5_authorization_tests {
+    use super::{compile_box5_route, Box5AuthorizedRequest};
+
+    fn request() -> Box5AuthorizedRequest {
+        Box5AuthorizedRequest {
+            action: "ASSIGNMENT_CREATE".to_string(),
+            route_selector: "ASSIGNMENT_MUTATION".to_string(),
+            resource_id: "txn_1234567890abcdef".to_string(),
+            parent_resource_id: None,
+            body_json: Some("{}".to_string()),
+            idempotency_key: Some("request-12345678".to_string()),
+            if_match_version: Some(1),
+        }
+    }
+
+    #[test]
+    fn native_intent_compiler_owns_exact_route_and_resource() {
+        let compiled = compile_box5_route(&request()).unwrap();
+        assert_eq!(
+            compiled.path,
+            "/v1/accounting/unaccounted/txn_1234567890abcdef/assign"
+        );
+        assert_eq!(
+            compiled.resource,
+            "ACCOUNTING_TRANSACTION:txn_1234567890abcdef"
+        );
+    }
+
+    #[test]
+    fn action_and_route_selector_mismatch_is_rejected() {
+        let mut candidate = request();
+        candidate.action = "RULE_DEACTIVATE".to_string();
+        assert_eq!(
+            compile_box5_route(&candidate).unwrap_err(),
+            "BOX5_RESOURCE_BINDING_INVALID"
+        );
+    }
+
+    #[test]
+    fn mutation_headers_are_typed_and_required() {
+        let mut candidate = request();
+        candidate.idempotency_key = None;
+        assert_eq!(
+            compile_box5_route(&candidate).unwrap_err(),
+            "BOX5_INTENT_INVALID"
+        );
+        let mut candidate = request();
+        candidate.if_match_version = Some(0);
+        assert_eq!(
+            compile_box5_route(&candidate).unwrap_err(),
+            "BOX5_INTENT_INVALID"
+        );
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -598,7 +1177,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_sidecar_capability_token,
-            helper1_trust::get_helper1_execution_trust_anchor,
+
             build_identity::get_native_build_context_digest,
             build_identity::get_native_release_distribution,
             runtime_trust::commands::verify_and_commit_trust_update,

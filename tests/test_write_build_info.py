@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import sys
@@ -36,11 +37,18 @@ def test_write_build_info_atomically_writes_exact_validated_payload(tmp_path):
     payload = json.loads(output.read_text(encoding="utf-8"))
     closure = payload.pop("a4_code_closure")
     helper = payload.pop("a4_authority_helper")
+    box5 = payload.pop("box5_authority")
     distribution = payload.pop("distribution")
     assert closure["schema_version"] == "butler.a4.code_closure.v5.3"
     assert set(closure["files"]) == set(_A4_CODE_FILES)
     assert len(closure["digest"]) == 64
     assert helper == {"bundled": False, "sha256": None}
+    assert box5 == {
+        "bundled": False,
+        "helper_identifier": None,
+        "helper_sha256": None,
+        "policy_sha256": None,
+    }
     # 기본값은 내부 빌드다. 배포용이 아님이 명시적으로 남아야 한다.
     assert distribution == {
         "schema_version": "butler.build_info.distribution.v1",
@@ -72,6 +80,41 @@ def test_write_build_info_binds_authority_helper_bytes(tmp_path):
         "bundled": True,
         "sha256": "f4b7215386e763c678a9ff707462de66d2011f192258c23eb21783e35b8a140a",
     }
+
+
+def test_write_build_info_binds_box5_helper_and_policy_as_one_unit(tmp_path):
+    _prepare_a4_files(tmp_path)
+    authority = tmp_path / "box5"
+    authority.mkdir()
+    helper = authority / "Box5UserAuthority"
+    policy = authority / "authorization-trust-policy-v2.json"
+    helper.write_bytes(b"signed helper bytes")
+    policy.write_bytes(b'{"schema_version":"2.0"}')
+    output = tmp_path / "BUILD_INFO.json"
+    write_build_info(
+        output,
+        box5_authority_helper=helper,
+        box5_authority_policy=policy,
+        **_VALID,
+    )
+    assert json.loads(output.read_text("utf-8"))["box5_authority"] == {
+        "bundled": True,
+        "helper_identifier": "com.butler.box5.user-authority.v2",
+        "helper_sha256": hashlib.sha256(helper.read_bytes()).hexdigest(),
+        "policy_sha256": hashlib.sha256(policy.read_bytes()).hexdigest(),
+    }
+
+
+def test_write_build_info_rejects_partial_box5_authority(tmp_path):
+    _prepare_a4_files(tmp_path)
+    helper = tmp_path / "Box5UserAuthority"
+    helper.write_bytes(b"helper")
+    with pytest.raises(BuildInfoWriteError, match="BOX5_AUTHORITY_BINDING_INCOMPLETE"):
+        write_build_info(
+            tmp_path / "BUILD_INFO.json",
+            box5_authority_helper=helper,
+            **_VALID,
+        )
 
 
 def test_distribution_build_records_bound_root_anchor(tmp_path):

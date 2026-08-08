@@ -31,14 +31,18 @@ def _junit_with_suites(total_suites: int) -> str:
     """Build a valid JUnit doc whose suite-family element count == total_suites.
 
     Every <testsuite>/<testsuites> element counts toward the suite total. The root
-    <testsuites> is 1; we add (total_suites - 1) <testsuite> elements and place the
-    single declared testcase in the last one so declared==observed (tests=1).
+    <testsuites> is 1; every child suite has a unique identity and one testcase,
+    because the protected parser rejects empty or duplicate suites.
     """
     assert total_suites >= 2
-    inner = "<testsuite/>" * (total_suites - 2)
-    inner += '<testsuite><testcase classname="t.x" name="x"/></testsuite>'
+    count = total_suites - 1
+    inner = "".join(
+        f'<testsuite name="s{index}" tests="1" failures="0" errors="0" skipped="0">'
+        f'<testcase classname="t.x" name="x{index}"/></testsuite>'
+        for index in range(count)
+    )
     doc = (
-        '<testsuites tests="1" failures="0" errors="0" skipped="0">'
+        f'<testsuites tests="{count}" failures="0" errors="0" skipped="0">'
         + inner
         + "</testsuites>"
     )

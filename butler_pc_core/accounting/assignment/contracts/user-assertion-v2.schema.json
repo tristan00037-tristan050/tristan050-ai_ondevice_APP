@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.invalid/schemas/user-assertion-v2.schema.json",
+  "title": "Butler User Authorization Assertion v2 Payload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ver", "iss", "aud", "sub", "tenant_id", "company_id", "device_id", "session_id", "action", "resource", "iat", "nbf", "exp", "jti", "nonce", "policy_id", "kid", "alg"],
+  "properties": {
+    "ver": {"const": "2.0"},
+    "iss": {"type": "string", "minLength": 1, "maxLength": 200},
+    "aud": {"type": "string", "minLength": 1, "maxLength": 200},
+    "sub": {"type": "string", "pattern": "^[A-Za-z0-9._:@-]{1,128}$"},
+    "tenant_id": {"type": "string", "pattern": "^[A-Za-z0-9._-]{1,80}$"},
+    "company_id": {"type": "string", "pattern": "^[A-Za-z0-9._-]{1,80}$"},
+    "device_id": {"type": "string", "pattern": "^[A-Za-z0-9._-]{1,128}$"},
+    "session_id": {"type": "string", "pattern": "^[A-Za-z0-9._-]{16,128}$"},
+    "action": {"enum": ["ASSIGNMENT_CREATE", "RULE_FUTURE_CREATE", "RULE_DEACTIVATE", "RULE_APPLICATION_REVERT", "QUARANTINE_ROW_RECOMPILE", "CONFLICT_RESOLVE"]},
+    "resource": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$"},
+    "iat": {"type": "integer", "minimum": 0},
+    "nbf": {"type": "integer", "minimum": 0},
+    "exp": {"type": "integer", "minimum": 1},
+    "jti": {"type": "string", "pattern": "^[A-Fa-f0-9]{32,64}$"},
+    "nonce": {"type": "string", "pattern": "^[A-Za-z0-9_-]{22,86}$"},
+    "policy_id": {"type": "string", "pattern": "^[A-Za-z0-9._-]{1,80}$"},
+    "kid": {"type": "string", "pattern": "^[A-Za-z0-9._-]{1,80}$"},
+    "alg": {"const": "EdDSA"}
+  }
+}

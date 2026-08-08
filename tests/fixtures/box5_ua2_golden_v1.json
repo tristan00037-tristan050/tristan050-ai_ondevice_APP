@@ -1,0 +1,30 @@
+{
+  "compact": "eyJhbGciOiJFZERTQSIsImtpZCI6IkJPWDUtVEVTVC1VQTItR09MREVOLTIwMjYwODAzIiwidHlwIjoiQlVUTEVSLVVBMiJ9.eyJhY3Rpb24iOiJBU1NJR05NRU5UX0NSRUFURSIsImFsZyI6IkVkRFNBIiwiYXVkIjoiYnV0bGVyLWJveDUtYWNjb3VudGluZyIsImNvbXBhbnlfaWQiOiJjb21wYW55LWdvbGRlbiIsImRldmljZV9pZCI6ImRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGQiLCJleHAiOjE5MDAwMDAxMjAsImlhdCI6MTkwMDAwMDAwMCwiaXNzIjoiYnV0bGVyLnRlc3QudXNlci1hdXRob3JpdHkiLCJqdGkiOiIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwia2lkIjoiQk9YNS1URVNULVVBMi1HT0xERU4tMjAyNjA4MDMiLCJuYmYiOjE5MDAwMDAwMDAsIm5vbmNlIjoiQUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVphYmNkZWYiLCJwb2xpY3lfaWQiOiJCT1g1LVRFU1QtVUEyLUdPTERFTiIsInJlc291cmNlIjoiQUNDT1VOVElOR19UUkFOU0FDVElPTjp0eG4tZ29sZGVuLTAwMSIsInNlc3Npb25faWQiOiJzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3NzIiwic3ViIjoic3ViamVjdC10ZXN0LWdvbGRlbi0wMDEiLCJ0ZW5hbnRfaWQiOiJ0ZW5hbnQtZ29sZGVuIiwidmVyIjoiMi4wIn0.A4WR4TKaARHgTjaz63H25IPjbBkLdDcyEGgdm-RBxlmAiqx-yKWG-j9CeQKzkyBdd8lTgByCg_ftVeIy4ZwRAg",
+  "payload": {
+    "action": "ASSIGNMENT_CREATE",
+    "alg": "EdDSA",
+    "aud": "butler-box5-accounting",
+    "company_id": "company-golden",
+    "device_id": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "exp": 1900000120,
+    "iat": 1900000000,
+    "iss": "butler.test.user-authority",
+    "jti": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "kid": "BOX5-TEST-UA2-GOLDEN-20260803",
+    "nbf": 1900000000,
+    "nonce": "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef",
+    "policy_id": "BOX5-TEST-UA2-GOLDEN",
+    "resource": "ACCOUNTING_TRANSACTION:txn-golden-001",
+    "session_id": "ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss",
+    "sub": "subject-test-golden-001",
+    "tenant_id": "tenant-golden",
+    "ver": "2.0"
+  },
+  "protected": {
+    "alg": "EdDSA",
+    "kid": "BOX5-TEST-UA2-GOLDEN-20260803",
+    "typ": "BUTLER-UA2"
+  },
+  "public_key_b64url": "AdVqemJYc-LAOKeMoGyvvHw9p3nCNMNNrLrYeH1mgAM",
+  "schema_version": "butler.box5.ua2.golden.v1"
+}

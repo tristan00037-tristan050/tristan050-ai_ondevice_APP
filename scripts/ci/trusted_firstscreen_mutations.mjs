@@ -295,7 +295,7 @@ async function main() {
   let parserControlNodes;
   try {
     parserControlNodes = collectPytest(
-      '<testsuite tests="1">'
+      '<testsuite name="parser-liveness-control" tests="1" failures="0" errors="0" skipped="0">'
       + '<testcase classname="tests.control" name="control"/></testsuite>',
     );
   } catch {
@@ -306,7 +306,7 @@ async function main() {
     throw new Error('PARSER_LIVENESS_CONTROL_FAILED');
   }
   if (!rejected(() => collectPytest(
-    '<!DOCTYPE x [<!ENTITY y "z">]><testsuite tests="1">'
+    '<!DOCTYPE x [<!ENTITY y "z">]><testsuite name="parser-rejection-control" tests="1" failures="0" errors="0" skipped="0">'
     + '<testcase classname="tests.control" name="control">&y;</testcase>'
     + '</testsuite>',
   ))) {

@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/schemas/accounting-authorization-audit-v2.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "event_id", "sequence", "observed_at", "actor_hash",
+    "tenant_id", "company_id", "action", "resource_hash", "decision",
+    "reason_code", "policy_digest", "assertion_jti_hash", "request_id",
+    "trace_id", "role_registry_version", "before_hash", "after_hash",
+    "prev_hash", "event_hash"
+  ],
+  "properties": {
+    "schema_version": {"const": "2.0"},
+    "event_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
+    "sequence": {"type": "integer", "minimum": 1},
+    "observed_at": {"type": "integer", "minimum": 1},
+    "actor_hash": {"$ref": "#/$defs/hash"},
+    "tenant_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "company_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "action": {"enum": ["ASSIGNMENT_CREATE", "RULE_FUTURE_CREATE", "RULE_DEACTIVATE", "RULE_APPLICATION_REVERT", "QUARANTINE_ROW_RECOMPILE", "CONFLICT_RESOLVE"]},
+    "resource_hash": {"$ref": "#/$defs/hash"},
+    "decision": {"enum": ["ALLOW", "DENY"]},
+    "reason_code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,95}$"},
+    "policy_digest": {"$ref": "#/$defs/hash"},
+    "assertion_jti_hash": {"$ref": "#/$defs/hash"},
+    "request_id": {"type": "string", "minLength": 16, "maxLength": 128},
+    "trace_id": {"type": "string", "minLength": 16, "maxLength": 128},
+    "role_registry_version": {"type": "integer", "minimum": 0},
+    "before_hash": {"$ref": "#/$defs/hash"},
+    "after_hash": {"$ref": "#/$defs/hash"},
+    "prev_hash": {"$ref": "#/$defs/hash"},
+    "event_hash": {"$ref": "#/$defs/hash"}
+  },
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

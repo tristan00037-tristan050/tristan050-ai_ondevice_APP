@@ -32,9 +32,11 @@ DEFAULT_ROUTE_OPERATION: dict[str, tuple[str, str]] = {
 }
 
 _ACCOUNTING_ASSIGNMENT_MUTATION_RE = re.compile(
-    r"^/v1/accounting/(?:unaccounted/[A-Za-z0-9_-]{16,128}/assign|"
+    r"^/v1/accounting/(?:unaccounted/[A-Za-z0-9_-]{16,128}/(?:assign|action-nonce)|"
     r"learned-rules/[A-Za-z0-9_-]{16,128}/deactivate|"
-    r"rule-conflicts/[A-Za-z0-9_-]{16,128}/resolve)$"
+    r"rule-conflicts/[A-Za-z0-9_-]{16,128}/resolve|"
+    r"review/(?:transactions/[A-Za-z0-9_-]{16,128}/rule-application/revert|"
+    r"batches/[A-Za-z0-9_-]{16,128}/quarantine/[A-Za-z0-9-]{36}/recompile))$"
 )
 
 

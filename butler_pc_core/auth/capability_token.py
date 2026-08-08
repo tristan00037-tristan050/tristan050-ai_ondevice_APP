@@ -35,7 +35,7 @@ class CapabilityTokenError(Exception):
 class CapabilityTokenManager:
     token_path: Path = field(default_factory=_default_token_path)
     _token: str | None = None
-    _session: "CapabilitySession | None" = None
+    _session: "LocalIpcSession | None" = None
 
     def generate(self) -> str:
         self._token = secrets.token_urlsafe(32)
@@ -58,7 +58,7 @@ class CapabilityTokenManager:
                 pass
             raise
         self.token_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
-        self._session = CapabilitySession.from_token(self._token)
+        self._session = LocalIpcSession.from_token(self._token)
         return self._token
 
     def clear(self) -> None:
@@ -89,7 +89,7 @@ class CapabilityTokenManager:
             self._token = value or None
         return self._token
 
-    def verify_authorization_header(self, authorization: str | None) -> "CapabilitySession":
+    def verify_authorization_header(self, authorization: str | None) -> "LocalIpcSession":
         if not authorization:
             raise CapabilityTokenError(FailClass.CAPABILITY_TOKEN_MISSING, "capability token missing")
         prefix = "Bearer "
@@ -103,7 +103,7 @@ class CapabilityTokenManager:
             raise CapabilityTokenError(FailClass.CAPABILITY_TOKEN_INVALID, "capability token invalid")
         session = self._session
         if session is None:
-            session = CapabilitySession.from_token(expected)
+            session = LocalIpcSession.from_token(expected)
             self._session = session
         if session.expires_at <= datetime.now(timezone.utc):
             raise CapabilityTokenError(FailClass.CAPABILITY_TOKEN_INVALID, "capability token expired")
@@ -111,23 +111,31 @@ class CapabilityTokenManager:
 
 
 @dataclass(frozen=True)
-class CapabilitySession:
+class LocalIpcSession:
+    """Transport-only identity for the local desktop/sidecar channel.
+
+    This object deliberately has no human actor, role, or accounting
+    permission. Those properties can only come from the separately verified
+    user authorization authority at the Box5 product boundary.
+    """
+
     session_id: str
-    actor_id: str
     device_id: str
-    role: str
     session_digest: str
+    device_binding_digest: str
+    audience: str
     expires_at: datetime
 
     @classmethod
-    def from_token(cls, token: str) -> "CapabilitySession":
+    def from_token(cls, token: str) -> "LocalIpcSession":
         digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
+        device_id = "device_" + digest[32:48]
         return cls(
             session_id="session_" + digest[:32],
-            actor_id="local-user",
-            device_id="device_" + digest[32:48],
-            role="user",
+            device_id=device_id,
             session_digest=digest,
+            device_binding_digest=hashlib.sha256(device_id.encode("utf-8")).hexdigest(),
+            audience="butler-local-sidecar-ipc",
             expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
         )
 

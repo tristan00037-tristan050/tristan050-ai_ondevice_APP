@@ -56,7 +56,7 @@ export function LearnedRuleSettings({ onClose }: LearnedRuleSettingsProps) {
         <div className="review-dialog__header">
           <div>
             <h2 id="learned-rules-title">거래처 제안 규칙</h2>
-            <p>규칙은 계정을 자동 확정하지 않고 다음 거래에서 제안만 합니다.</p>
+            <p>규칙은 다음 거래에 검토 초안만 적용하며 전표·원장·재무제표를 확정하지 않습니다.</p>
           </div>
           <button ref={closeRef} type="button" aria-label="거래처 제안 규칙 닫기" onClick={onClose}>닫기</button>
         </div>
@@ -68,11 +68,11 @@ export function LearnedRuleSettings({ onClose }: LearnedRuleSettingsProps) {
               <div>
                 <strong>{rule.descriptor_display}</strong>
                 <span>계정 ID {rule.account_id}</span>
-                <span>{rule.state === 'ACTIVE_SUGGESTION' ? '제안 중' : '비활성'}</span>
+                <span>{rule.state === 'ACTIVE_USER_RULE' ? '검토 초안 적용 중' : '비활성 또는 검토 필요'}</span>
               </div>
               <button
                 type="button"
-                disabled={rule.state !== 'ACTIVE_SUGGESTION' || pending !== null}
+                disabled={rule.state !== 'ACTIVE_USER_RULE' || pending !== null}
                 onClick={() => deactivate(rule)}
               >
                 {pending === rule.rule_id ? '처리 중' : '비활성화'}

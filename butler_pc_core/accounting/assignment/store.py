@@ -19,12 +19,14 @@ from .domain import (
     ConflictDecision,
     EventType,
     RuleState,
+    TenantContext,
     sha256_json,
     stable_json,
     utc_now,
 )
 from .security import TokenService
 from .a4_store_schema_v32 import ensure_a4_v32_schema
+from .stage3_store_schema_v3 import create_pre_migration_backup, ensure_stage3_v3_schema
 
 
 A4_VERIFIER_AUTHORITY_TRUST_PATH = (
@@ -35,6 +37,16 @@ A4_VERIFIER_AUTHORITY_TRUST_PATH = (
     / "verifier_authority_trust.production.json"
 )
 A4_ALLOW_TEST_VERIFIER_AUTHORITY = False
+_PRIVILEGED_AUTHORIZATION_ACTIONS = frozenset(
+    {
+        "ASSIGNMENT_CREATE",
+        "RULE_FUTURE_CREATE",
+        "RULE_DEACTIVATE",
+        "RULE_APPLICATION_REVERT",
+        "QUARANTINE_ROW_RECOMPILE",
+        "CONFLICT_RESOLVE",
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +70,7 @@ class SQLiteAssignmentStore:
             path.parent.chmod(0o700)
         except OSError:
             pass
+        create_pre_migration_backup(path)
         self._initialize()
 
     def _connect(self) -> sqlite3.Connection:
@@ -342,6 +355,7 @@ class SQLiteAssignmentStore:
             if "binding_digest" not in edge_columns:
                 conn.execute("ALTER TABLE recon_edge ADD COLUMN binding_digest TEXT")
             self._a4_schema_ready = ensure_a4_v32_schema(conn)
+            ensure_stage3_v3_schema(conn)
         try:
             os.chmod(self.path, 0o600)
         except OSError:
@@ -384,22 +398,402 @@ class SQLiteAssignmentStore:
             return None
         if row["body_digest"] != body_digest:
             raise AssignmentError(
-                "IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_BODY",
+                "IDEMPOTENCY_KEY_REUSE_MISMATCH",
                 409,
                 "The idempotency key was already used for a different request.",
             )
         return json.loads(row["response_json"])
 
+    def persist_review_batch(
+        self,
+        *,
+        batch: dict[str, Any],
+        rows: list[dict[str, Any]],
+        receipts: list[dict[str, Any]],
+    ) -> bool:
+        """Persist the complete row-conserving projection in one commit.
+
+        Returns ``False`` only for a byte-equivalent already persisted batch.
+        Raw counterparty/description fields are intentionally not accepted.
+        """
+
+        allowed_batch = {
+            "batch_id", "tenant_digest", "company_scope_digest", "source_file_sha256",
+            "adapter_id", "adapter_version", "normalization_version", "input_row_count",
+            "classified_count", "unaccounted_count", "quarantined_count",
+            "duplicate_linked_count", "created_at_epoch_ms", "ambiguous_columns",
+        }
+        if set(batch) != allowed_batch:
+            raise AssignmentError("INVALID_REQUEST_SCHEMA", 422, "Batch projection fields are invalid.")
+        if batch["input_row_count"] != sum(
+            int(batch[name])
+            for name in (
+                "classified_count", "unaccounted_count", "quarantined_count",
+                "duplicate_linked_count",
+            )
+        ):
+            raise AssignmentError("ROW_CONSERVATION_VIOLATION", 503, "The batch row counts are inconsistent.")
+        expected_row_fields = {
+            "row_id", "source_row_number", "source_row_fingerprint", "direction",
+            "currency", "amount_minor", "booked_date", "terminal_state",
+            "classification_source", "reason_code", "transaction_id",
+            "duplicate_of_row_id", "vendor_token", "hmac_key_id", "account_id",
+            "rule_id", "transaction_version", "created_at_epoch_ms",
+        }
+        if len(rows) != int(batch["input_row_count"]) or any(
+            set(row) != expected_row_fields for row in rows
+        ):
+            raise AssignmentError("ROW_CONSERVATION_VIOLATION", 503, "The batch row projection is incomplete.")
+        fingerprint = sha256_json({"batch": batch, "rows": rows, "receipts": receipts})
+        with self._lock, self._connect() as conn:
+            self._begin(conn)
+            try:
+                existing = conn.execute(
+                    "SELECT * FROM accounting_source_batches WHERE batch_id=?",
+                    (batch["batch_id"],),
+                ).fetchone()
+                if existing is not None:
+                    existing_fingerprint = sha256_json(
+                        {
+                            "source_file_sha256": existing["source_file_sha256"],
+                            "adapter_id": existing["adapter_id"],
+                            "adapter_version": existing["adapter_version"],
+                            "input_row_count": existing["input_row_count"],
+                        }
+                    )
+                    claimed = sha256_json(
+                        {
+                            "source_file_sha256": batch["source_file_sha256"],
+                            "adapter_id": batch["adapter_id"],
+                            "adapter_version": batch["adapter_version"],
+                            "input_row_count": batch["input_row_count"],
+                        }
+                    )
+                    if existing_fingerprint != claimed:
+                        raise AssignmentError(
+                            "BATCH_ID_REUSE_MISMATCH", 409, "The batch identifier is already bound to other input."
+                        )
+                    conn.execute("COMMIT")
+                    return False
+                conn.execute(
+                    """INSERT INTO accounting_source_batches
+                       (batch_id,tenant_digest,company_scope_digest,source_file_sha256,
+                        adapter_id,adapter_version,normalization_version,input_row_count,
+                        classified_count,unaccounted_count,quarantined_count,
+                        duplicate_linked_count,state,created_at_epoch_ms,resource_version,
+                        ambiguous_columns_json)
+                       VALUES(?,?,?,?,?,?,?,?,?,?,?,?, 'READY', ?,1,?)""",
+                    (
+                        batch["batch_id"], batch["tenant_digest"], batch["company_scope_digest"],
+                        batch["source_file_sha256"], batch["adapter_id"], batch["adapter_version"],
+                        batch["normalization_version"], batch["input_row_count"],
+                        batch["classified_count"], batch["unaccounted_count"],
+                        batch["quarantined_count"], batch["duplicate_linked_count"],
+                        batch["created_at_epoch_ms"], stable_json(batch["ambiguous_columns"]),
+                    ),
+                )
+                for row in rows:
+                    conn.execute(
+                        """INSERT INTO accounting_source_rows
+                           (row_id,batch_id,source_row_number,source_row_fingerprint,direction,
+                            currency,amount_minor,booked_date,terminal_state,classification_source,
+                            reason_code,transaction_id,duplicate_of_row_id,vendor_token,hmac_key_id,
+                            account_id,rule_id,transaction_version,created_at_epoch_ms)
+                           VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                        (
+                            row["row_id"], batch["batch_id"], row["source_row_number"],
+                            row["source_row_fingerprint"], row["direction"], row["currency"],
+                            row["amount_minor"], row["booked_date"], row["terminal_state"],
+                            row["classification_source"], row["reason_code"], row["transaction_id"],
+                            row["duplicate_of_row_id"], row["vendor_token"], row["hmac_key_id"],
+                            row["account_id"], row["rule_id"], row["transaction_version"],
+                            row["created_at_epoch_ms"],
+                        ),
+                    )
+                for receipt in receipts:
+                    conn.execute(
+                        """INSERT INTO rule_application_receipts
+                           (receipt_id,tenant_digest,transaction_id,rule_id,source_assignment_id,
+                            match_key_digest,registry_digest,classification_source,journal_posted,
+                            financial_statement_effective,actor_id_digest,applied_at_epoch_ms,
+                            event_hash,resource_version)
+                           VALUES(?,?,?,?,?,?,?,'USER_RULE_APPLIED_DRAFT',0,0,?,?,?,1)""",
+                        (
+                            receipt["receipt_id"], batch["tenant_digest"], receipt["transaction_id"],
+                            receipt["rule_id"], receipt["source_assignment_id"],
+                            receipt["match_key_digest"], receipt["registry_digest"],
+                            receipt["actor_id_digest"], receipt["applied_at_epoch_ms"],
+                            receipt["event_hash"],
+                        ),
+                    )
+                conn.execute("COMMIT")
+                return True
+            except AssignmentError:
+                if conn.in_transaction:
+                    conn.execute("ROLLBACK")
+                raise
+            except sqlite3.DatabaseError as exc:
+                if conn.in_transaction:
+                    conn.execute("ROLLBACK")
+                raise AssignmentError(
+                    "PERSISTENCE_COMMIT_FAILED", 503, "The review batch was not committed."
+                ) from exc
+
+    def review_batch(self, tenant_digest: str, batch_id: str) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            batch = conn.execute(
+                "SELECT * FROM accounting_source_batches WHERE tenant_digest=? AND batch_id=? AND state='READY'",
+                (tenant_digest, batch_id),
+            ).fetchone()
+            if batch is None:
+                return None
+            rows = conn.execute(
+                "SELECT * FROM accounting_source_rows WHERE batch_id=? ORDER BY source_row_number",
+                (batch_id,),
+            ).fetchall()
+        result = dict(batch)
+        result["rows"] = [dict(row) for row in rows]
+        result["ambiguous_columns"] = json.loads(result.pop("ambiguous_columns_json"))
+        return result
+
+    def remove_review_batch(self, batch_id: str) -> None:
+        """Tombstone a durable projection while preserving row lineage evidence."""
+
+        with self._lock, self._connect() as conn:
+            self._begin(conn)
+            try:
+                conn.execute(
+                    """UPDATE accounting_source_batches SET state='REMOVED',
+                       resource_version=resource_version+1 WHERE batch_id=? AND state='READY'""",
+                    (batch_id,),
+                )
+                conn.execute("COMMIT")
+            except sqlite3.DatabaseError as exc:
+                if conn.in_transaction:
+                    conn.execute("ROLLBACK")
+                raise AssignmentError(
+                    "PERSISTENCE_COMMIT_FAILED", 503,
+                    "The review projection could not be removed.",
+                ) from exc
+
+    def review_transaction(self, tenant_digest: str, transaction_id: str) -> tuple[dict[str, Any], dict[str, Any]] | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                """SELECT r.*,b.tenant_digest,b.company_scope_digest,b.adapter_id,b.adapter_version,
+                          b.normalization_version,b.resource_version AS batch_version,b.batch_id
+                   FROM accounting_source_rows r
+                   JOIN accounting_source_batches b ON b.batch_id=r.batch_id
+                   WHERE b.tenant_digest=? AND r.transaction_id=? AND b.state='READY'""",
+                (tenant_digest, transaction_id),
+            ).fetchone()
+            if row is None:
+                return None
+            batch = conn.execute(
+                "SELECT * FROM accounting_source_batches WHERE batch_id=?",
+                (row["batch_id"],),
+            ).fetchone()
+        return dict(batch), dict(row)
+
+    def issue_action_nonce(
+        self,
+        *,
+        tenant_digest: str,
+        actor_id_digest: str,
+        session_id_digest: str,
+        transaction_id: str,
+        action: str,
+        now_epoch_ms: int,
+        ttl_ms: int = 300_000,
+    ) -> str:
+        raw = __import__("secrets").token_urlsafe(48)
+        digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
+        with self._lock, self._connect() as conn:
+            self._begin(conn)
+            conn.execute(
+                """INSERT INTO accounting_action_nonces
+                   (nonce_digest,tenant_digest,actor_id_digest,session_id_digest,
+                    transaction_id,action,expires_at_epoch_ms)
+                   VALUES(?,?,?,?,?,?,?)""",
+                (
+                    digest, tenant_digest, actor_id_digest, session_id_digest,
+                    transaction_id, action, now_epoch_ms + ttl_ms,
+                ),
+            )
+            conn.execute("COMMIT")
+        return raw
+
+    def quarantine_rows(self, tenant_digest: str, batch_id: str) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT r.row_id,r.batch_id,r.source_row_number,r.source_row_fingerprint,
+                          r.reason_code,r.terminal_state AS state,r.transaction_version AS resource_version
+                   FROM accounting_source_rows r
+                   JOIN accounting_source_batches b ON b.batch_id=r.batch_id
+                   WHERE b.tenant_digest=? AND r.batch_id=? AND r.terminal_state='QUARANTINED'
+                   ORDER BY r.source_row_number""",
+                (tenant_digest, batch_id),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def recompile_quarantine_row(
+        self,
+        *,
+        tenant_digest: str,
+        actor_id_digest: str,
+        session_id_digest: str,
+        batch_id: str,
+        row_id: str,
+        expected_version: int,
+        correction_digest: str,
+        replacement: dict[str, Any],
+        idempotency_key: str,
+        authority_context: TenantContext | None = None,
+    ) -> dict[str, Any]:
+        route_id = "POST:/v1/accounting/review/batches/{batch_id}/quarantine/{row_id}/recompile"
+        key_digest = self.tokens.idempotency_digest(idempotency_key)
+        body_digest = sha256_json({"correction_digest": correction_digest, "replacement": replacement})
+        with self._lock, self._connect() as conn:
+            self._begin(conn)
+            try:
+                replay = self._idempotent_response(
+                    conn, tenant_digest=tenant_digest, actor_id=actor_id_digest,
+                    route_id=route_id, resource_id=row_id, key_digest=key_digest,
+                    body_digest=body_digest,
+                )
+                if replay is not None:
+                    conn.execute("COMMIT")
+                    return replay
+                row = conn.execute(
+                    """SELECT r.*,b.tenant_digest FROM accounting_source_rows r
+                       JOIN accounting_source_batches b ON b.batch_id=r.batch_id
+                       WHERE r.batch_id=? AND r.row_id=?""",
+                    (batch_id, row_id),
+                ).fetchone()
+                if row is None or row["tenant_digest"] != tenant_digest:
+                    raise AssignmentError("AUTHORIZATION_DENIED", 404, "The accounting resource is unavailable.")
+                if row["terminal_state"] != "QUARANTINED":
+                    raise AssignmentError("TRANSACTION_NOT_REVIEWABLE", 409, "The row is no longer quarantined.")
+                if int(row["transaction_version"]) != expected_version:
+                    raise AssignmentError("STALE_ASSIGNMENT_VERSION", 409, "The row version is stale.")
+                previous = conn.execute(
+                    "SELECT event_hash FROM accounting_quarantine_events WHERE tenant_digest=? ORDER BY sequence DESC LIMIT 1",
+                    (tenant_digest,),
+                ).fetchone()
+                previous_hash = str(previous["event_hash"]) if previous else None
+                now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+                event_id = str(uuid.uuid4())
+                event_body = {
+                    "event_id": event_id, "tenant_digest": tenant_digest, "batch_id": batch_id,
+                    "row_id": row_id, "reason_code": "QUARANTINE_CORRECTION_REQUESTED",
+                    "correction_field_digest": correction_digest,
+                    "actor_id_digest": actor_id_digest, "session_id_digest": session_id_digest,
+                    "previous_event_hash": previous_hash, "occurred_at_epoch_ms": now_ms,
+                }
+                event_hash = sha256_json(event_body)
+                conn.execute(
+                    """INSERT INTO accounting_quarantine_events
+                       (event_id,tenant_digest,batch_id,row_id,reason_code,correction_field_digest,
+                        actor_id_digest,session_id_digest,previous_event_hash,event_hash,occurred_at_epoch_ms)
+                       VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+                    (
+                        event_id, tenant_digest, batch_id, row_id,
+                        "QUARANTINE_CORRECTION_REQUESTED", correction_digest,
+                        actor_id_digest, session_id_digest, previous_hash, event_hash, now_ms,
+                    ),
+                )
+                next_version = expected_version + 1
+                conn.execute(
+                    """UPDATE accounting_source_rows SET amount_minor=?,booked_date=?,currency=?,
+                       direction=?,terminal_state=?,classification_source=?,reason_code=?,
+                       transaction_id=?,transaction_version=? WHERE row_id=?""",
+                    (
+                        replacement["amount_minor"], replacement["booked_date"], replacement["currency"],
+                        replacement["direction"], replacement["terminal_state"],
+                        replacement["classification_source"], replacement["reason_code"],
+                        replacement["transaction_id"], next_version, row_id,
+                    ),
+                )
+                conn.execute(
+                    """UPDATE accounting_source_batches SET quarantined_count=quarantined_count-1,
+                       unaccounted_count=unaccounted_count+?,classified_count=classified_count+?,
+                       resource_version=resource_version+1 WHERE batch_id=?""",
+                    (
+                        1 if replacement["terminal_state"] == "UNACCOUNTED" else 0,
+                        1 if replacement["terminal_state"] == "CLASSIFIED" else 0,
+                        batch_id,
+                    ),
+                )
+                response = {
+                    "schema_version": "3.0", "row_id": row_id,
+                    "state": replacement["terminal_state"], "resource_version": next_version,
+                    "event_hash": event_hash,
+                }
+                conn.execute(
+                    """INSERT INTO idempotency_records
+                       (tenant_digest,actor_id,route_id,resource_id,key_digest,body_digest,response_json,created_at)
+                       VALUES(?,?,?,?,?,?,?,?)""",
+                    (
+                        tenant_digest, actor_id_digest, route_id, row_id, key_digest,
+                        body_digest, stable_json(response), utc_now(),
+                    ),
+                )
+                self._append_authorization_allow_if_present(
+                    conn,
+                    context=authority_context,
+                    reason_code="MUTATION_COMMITTED",
+                    before_hash=sha256_json(dict(row)),
+                    after_hash=sha256_json(response),
+                    observed_at=now_ms,
+                )
+                conn.execute("COMMIT")
+                return response
+            except AssignmentError:
+                if conn.in_transaction:
+                    conn.execute("ROLLBACK")
+                raise
+            except sqlite3.DatabaseError as exc:
+                if conn.in_transaction:
+                    conn.execute("ROLLBACK")
+                raise AssignmentError("PERSISTENCE_COMMIT_FAILED", 503, "The correction was not committed.") from exc
+
     def active_rule(
         self, tenant_digest: str, token: str, adapter_family: str, normalization: str
     ) -> dict[str, Any] | None:
+        """Legacy compatibility lookup; schema-v3 active rules require exact dimensions."""
         with self._connect() as conn:
             row = conn.execute(
                 """SELECT * FROM learned_rules WHERE tenant_digest=? AND vendor_match_token=?
-                   AND adapter_family=? AND normalization_version=? AND state='ACTIVE_SUGGESTION'""",
+                   AND adapter_id=? AND normalization_version=? AND state='ACTIVE_USER_RULE'""",
                 (tenant_digest, token, adapter_family, normalization),
             ).fetchone()
         return dict(row) if row is not None else None
+
+    def active_rules_exact(
+        self,
+        *,
+        tenant_digest: str,
+        company_scope_digest: str,
+        vendor_token: str,
+        adapter_id: str,
+        adapter_version: str,
+        normalization_version: str,
+        direction: str,
+        currency: str,
+        hmac_key_id: str,
+    ) -> list[dict[str, Any]]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT * FROM learned_rules WHERE tenant_digest=? AND company_scope_digest=?
+                   AND vendor_match_token=? AND adapter_id=? AND adapter_version=?
+                   AND normalization_version=? AND direction=? AND currency=?
+                   AND hmac_key_id=? AND state='ACTIVE_USER_RULE'
+                   ORDER BY rule_id""",
+                (
+                    tenant_digest, company_scope_digest, vendor_token, adapter_id,
+                    adapter_version, normalization_version, direction, currency, hmac_key_id,
+                ),
+            ).fetchall()
+        return [dict(row) for row in rows]
 
     def current_assignment(
         self, tenant_digest: str, txn_id: str
@@ -489,12 +883,300 @@ class SQLiteAssignmentStore:
         )
         return event_id, event_hash
 
+    @staticmethod
+    def _append_authority_bound_event(
+        conn: sqlite3.Connection,
+        *,
+        event_id: str,
+        actor_id_digest: str,
+        tenant_digest: str,
+        company_digest: str,
+        ipc_session_digest: str,
+        authorization_assertion_digest: str,
+        authorization_decision_id: str,
+        policy_version: int,
+        policy_digest: str,
+        action: str,
+        resource_digest: str,
+        nonce_digest: str,
+        request_digest: str,
+        occurred_epoch_ms: int,
+    ) -> str:
+        previous = conn.execute(
+            "SELECT event_hash FROM accounting_authority_bound_events "
+            "WHERE tenant_digest=? ORDER BY sequence DESC LIMIT 1",
+            (tenant_digest,),
+        ).fetchone()
+        previous_hash = (
+            str(previous["event_hash"])
+            if previous is not None
+            else sha256_json(
+                {"chain": "AUTHORIZATION_GENESIS", "tenant_digest": tenant_digest}
+            )
+        )
+        payload = {
+            "event_id": event_id,
+            "event_type": "ASSIGNMENT_CREATED",
+            "actor_id_digest": actor_id_digest,
+            "tenant_digest": tenant_digest,
+            "company_digest": company_digest,
+            "ipc_session_digest": ipc_session_digest,
+            "authorization_assertion_digest": authorization_assertion_digest,
+            "authorization_decision_id": authorization_decision_id,
+            "policy_version": policy_version,
+            "policy_digest": policy_digest,
+            "action": action,
+            "resource_digest": resource_digest,
+            "nonce_digest": nonce_digest,
+            "request_digest": request_digest,
+            "occurred_epoch_ms": occurred_epoch_ms,
+            "previous_event_hash": previous_hash,
+        }
+        event_hash = sha256_json(payload)
+        conn.execute(
+            """INSERT INTO accounting_authority_bound_events
+               (event_id,event_type,actor_id_digest,tenant_digest,company_digest,
+                ipc_session_digest,authorization_assertion_digest,
+                authorization_decision_id,policy_version,policy_digest,action,
+                resource_digest,nonce_digest,request_digest,occurred_epoch_ms,
+                previous_event_hash,event_hash)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                event_id,
+                payload["event_type"],
+                actor_id_digest,
+                tenant_digest,
+                company_digest,
+                ipc_session_digest,
+                authorization_assertion_digest,
+                authorization_decision_id,
+                policy_version,
+                policy_digest,
+                action,
+                resource_digest,
+                nonce_digest,
+                request_digest,
+                occurred_epoch_ms,
+                previous_hash,
+                event_hash,
+            ),
+        )
+        return event_hash
+
+    @staticmethod
+    def _append_authorization_audit_v2(
+        conn: sqlite3.Connection,
+        *,
+        context: TenantContext,
+        reason_code: str,
+        before_hash: str,
+        after_hash: str,
+        observed_at: int,
+        decision: str = "ALLOW",
+    ) -> str:
+        """Append one independently replayable, raw-zero authority event.
+
+        This method is called inside the business transaction.  SQLite failure
+        therefore rolls back both the privileged write and its audit record.
+        """
+
+        previous = conn.execute(
+            "SELECT sequence,event_hash FROM accounting_authorization_audit_v2 "
+            "WHERE tenant_id=? ORDER BY sequence DESC LIMIT 1",
+            (context.tenant_id,),
+        ).fetchone()
+        sequence = (int(previous["sequence"]) + 1) if previous is not None else 1
+        previous_hash = str(previous["event_hash"]) if previous is not None else "0" * 64
+        event_id = uuid.uuid4().hex
+        jti_hash = hashlib.sha256(
+            context.authorization_decision_id.encode("utf-8")
+        ).hexdigest()
+        payload = {
+            "schema_version": "2.0",
+            "event_id": event_id,
+            "sequence": sequence,
+            "observed_at": observed_at,
+            "actor_hash": context.actor_id_digest,
+            "tenant_id": context.tenant_id,
+            "company_id": context.authorization_company_id,
+            "action": context.action,
+            "resource_hash": context.authorization_resource_digest,
+            "decision": decision,
+            "reason_code": reason_code,
+            "policy_digest": context.authorization_policy_digest,
+            "assertion_jti_hash": jti_hash,
+            "request_id": context.request_id,
+            "trace_id": context.authorization_decision_id,
+            "role_registry_version": context.role_registry_version,
+            "before_hash": before_hash,
+            "after_hash": after_hash,
+            "prev_hash": previous_hash,
+        }
+        event_hash = sha256_json(payload)
+        conn.execute(
+            """INSERT INTO accounting_authorization_audit_v2
+               (event_id,observed_at,actor_hash,tenant_id,company_id,action,
+                resource_hash,decision,reason_code,policy_digest,assertion_jti_hash,
+                request_id,trace_id,role_registry_version,before_hash,after_hash,
+                prev_hash,event_hash)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                event_id,
+                observed_at,
+                context.actor_id_digest,
+                context.tenant_id,
+                context.authorization_company_id,
+                context.action,
+                context.authorization_resource_digest,
+                decision,
+                reason_code,
+                context.authorization_policy_digest,
+                jti_hash,
+                context.request_id,
+                context.authorization_decision_id,
+                context.role_registry_version,
+                before_hash,
+                after_hash,
+                previous_hash,
+                event_hash,
+            ),
+        )
+        return event_hash
+
+    @classmethod
+    def _append_authorization_allow_if_present(
+        cls,
+        conn: sqlite3.Connection,
+        *,
+        context: TenantContext | None,
+        reason_code: str,
+        before_hash: str,
+        after_hash: str,
+        observed_at: int,
+    ) -> None:
+        # Direct runtime unit-policy calls carry no human decision and never
+        # become product evidence. Product routes always supply the complete
+        # authority context and must append successfully before COMMIT.
+        if context is None or context.authorization_policy_version is None:
+            return
+        cls._append_authorization_audit_v2(
+            conn,
+            context=context,
+            reason_code=reason_code,
+            before_hash=before_hash,
+            after_hash=after_hash,
+            observed_at=observed_at,
+        )
+
+    def append_authorization_denial(
+        self,
+        *,
+        tenant_id: str,
+        company_id: str,
+        action: str,
+        resource_id: str,
+        reason_code: str,
+        request_id: str,
+        policy_digest: str,
+    ) -> None:
+        """Persist a raw-zero denial observed at the product route boundary."""
+
+        if (
+            action not in _PRIVILEGED_AUTHORIZATION_ACTIONS
+            or not re.fullmatch(r"[A-Z][A-Z0-9_]{0,95}", reason_code)
+            or not tenant_id
+            or len(tenant_id) > 128
+            or not company_id
+            or len(company_id) > 128
+            or not re.fullmatch(r"[A-Za-z0-9._:-]{8,128}", request_id)
+            or not re.fullmatch(r"[0-9a-f]{64}", policy_digest)
+        ):
+            raise AssignmentError(
+                "AUTHORIZATION_AUDIT_UNAVAILABLE",
+                503,
+                "The authorization denial could not be audited.",
+            )
+        resource_hash = hashlib.sha256(resource_id.encode("utf-8")).hexdigest()
+        no_mutation_hash = sha256_json(
+            {
+                "tenant_id": tenant_id,
+                "company_id": company_id,
+                "action": action,
+                "resource_hash": resource_hash,
+                "mutation": "NONE",
+            }
+        )
+        request_actor_hash = hashlib.sha256(
+            ("DENIED_ACTOR:" + request_id).encode("utf-8")
+        ).hexdigest()
+        context = TenantContext(
+            tenant_id=tenant_id,
+            tenant_digest=hashlib.sha256(
+                (tenant_id + ":" + company_id).encode("utf-8")
+            ).hexdigest(),
+            actor_id="actor_" + request_actor_hash[:32],
+            actor_id_digest=request_actor_hash,
+            session_id_digest=hashlib.sha256(
+                ("UNVERIFIED_SESSION:" + request_id).encode("utf-8")
+            ).hexdigest(),
+            device_id_digest=hashlib.sha256(
+                ("UNVERIFIED_DEVICE:" + request_id).encode("utf-8")
+            ).hexdigest(),
+            permission_decision_digest=hashlib.sha256(
+                ("DENY:" + reason_code + ":" + request_id).encode("utf-8")
+            ).hexdigest(),
+            permission_policy_version="authority-denial.v2",
+            action=action,
+            authorization_decision_id=request_id,
+            authorization_policy_digest=policy_digest,
+            authorization_assertion_digest=hashlib.sha256(
+                ("UNVERIFIED_ASSERTION:" + request_id).encode("utf-8")
+            ).hexdigest(),
+            authorization_resource_digest=resource_hash,
+            role_registry_version=0,
+            authorization_company_id=company_id,
+            request_id=request_id,
+        )
+        observed_at = int(datetime.now(timezone.utc).timestamp() * 1000)
+        try:
+            with self._lock, self._connect() as conn:
+                self._begin(conn)
+                self._append_authorization_audit_v2(
+                    conn,
+                    context=context,
+                    reason_code=reason_code,
+                    before_hash=no_mutation_hash,
+                    after_hash=no_mutation_hash,
+                    observed_at=observed_at,
+                    decision="DENY",
+                )
+                conn.execute("COMMIT")
+        except AssignmentError:
+            raise
+        except sqlite3.DatabaseError as exc:
+            raise AssignmentError(
+                "AUTHORIZATION_AUDIT_UNAVAILABLE",
+                503,
+                "The authorization denial could not be audited.",
+            ) from exc
+
     def create_assignment(
         self,
         *,
         tenant_id: str,
         tenant_digest: str,
         actor_id: str,
+        actor_id_digest: str,
+        session_id_digest: str,
+        device_id_digest: str,
+        permission_decision_digest: str,
+        authorization_decision_id: str,
+        authorization_action: str,
+        permission_policy_version: str,
+        authorization_policy_version: int | None,
+        authorization_policy_digest: str,
+        authorization_assertion_digest: str,
+        authorization_resource_digest: str,
         txn_id: str,
         batch_id: str,
         expected_version: int,
@@ -502,14 +1184,20 @@ class SQLiteAssignmentStore:
         scope: str,
         vendor_match_token: str,
         adapter_family: str,
+        adapter_version: str,
         normalization_version: str,
+        company_scope_digest: str,
+        direction: str,
+        currency: str,
         registry_digest: str,
         overlay_digest: str,
         match_key_id: str,
         assignment_id: str,
         rule_id: str | None,
         idempotency_key: str,
+        user_action_nonce: str,
         body: dict[str, Any],
+        authority_context: TenantContext | None = None,
     ) -> CommitResult:
         route_id = "POST:/v1/accounting/unaccounted/{txn_id}/assign"
         key_digest = self.tokens.idempotency_digest(idempotency_key)
@@ -530,6 +1218,25 @@ class SQLiteAssignmentStore:
                     conn.execute("COMMIT")
                     return CommitResult(replay, True)
 
+                now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+                nonce_digest = hashlib.sha256(user_action_nonce.encode("utf-8")).hexdigest()
+                nonce = conn.execute(
+                    "SELECT * FROM accounting_action_nonces WHERE nonce_digest=?",
+                    (nonce_digest,),
+                ).fetchone()
+                if nonce is None or (
+                    nonce["tenant_digest"] != tenant_digest
+                    or nonce["actor_id_digest"] != actor_id_digest
+                    or nonce["session_id_digest"] != session_id_digest
+                    or nonce["transaction_id"] != txn_id
+                    or nonce["action"] != authorization_action
+                ):
+                    raise AssignmentError("NONCE_INVALID", 409, "The user action nonce is not bound to this request.")
+                if int(nonce["expires_at_epoch_ms"]) < now_ms:
+                    raise AssignmentError("NONCE_INVALID", 409, "The user action nonce has expired.")
+                if nonce["used_at_epoch_ms"] is not None:
+                    raise AssignmentError("NONCE_REUSED", 409, "The user action nonce was already used.")
+
                 current = conn.execute(
                     "SELECT * FROM current_assignments WHERE tenant_digest=? AND txn_id=?",
                     (tenant_digest, txn_id),
@@ -539,21 +1246,28 @@ class SQLiteAssignmentStore:
                 )
                 if current_version != expected_version:
                     raise AssignmentError(
-                        "TRANSACTION_STALE",
-                        412,
+                        "STALE_ASSIGNMENT_VERSION",
+                        409,
                         "The transaction changed before assignment.",
                         current_version=current_version,
                     )
 
                 if rule_id is not None:
                     conflict = conn.execute(
-                        """SELECT * FROM learned_rules WHERE tenant_digest=? AND vendor_match_token=?
-                           AND adapter_family=? AND normalization_version=? AND state='ACTIVE_SUGGESTION'""",
+                        """SELECT * FROM learned_rules WHERE tenant_digest=? AND company_scope_digest=?
+                           AND vendor_match_token=? AND adapter_id=? AND adapter_version=?
+                           AND normalization_version=? AND direction=? AND currency=?
+                           AND hmac_key_id=? AND state='ACTIVE_USER_RULE'""",
                         (
                             tenant_digest,
+                            company_scope_digest,
                             vendor_match_token,
                             adapter_family,
+                            adapter_version,
                             normalization_version,
+                            direction,
+                            currency,
+                            match_key_id,
                         ),
                     ).fetchone()
                     if conflict is not None and conflict["account_id"] != account_id:
@@ -583,7 +1297,7 @@ class SQLiteAssignmentStore:
                         )
                         conn.execute("COMMIT")
                         raise AssignmentError(
-                            "LEARNED_RULE_CONFLICT",
+                            "RULE_CONFLICT_REVIEW_REQUIRED",
                             409,
                             "An existing suggestion rule conflicts with this account.",
                             actions=(f"RESOLVE_CONFLICT:{conflict_id}",),
@@ -629,7 +1343,7 @@ class SQLiteAssignmentStore:
                     )
 
                 assignment_event = {
-                    "schema_version": "2.0",
+                    "schema_version": "3.0",
                     "event_id": assignment_id,
                     "event_type": EventType.ASSIGNMENT_CREATED.value,
                     "tenant_digest": tenant_digest,
@@ -643,6 +1357,14 @@ class SQLiteAssignmentStore:
                     "account_id": account_id,
                     "scope": scope,
                     "actor_id": actor_id,
+                    "actor_id_digest": actor_id_digest,
+                    "session_id_digest": session_id_digest,
+                    "device_id_digest": device_id_digest,
+                    "permission_decision_digest": permission_decision_digest,
+                    "permission_policy_version": permission_policy_version,
+                    "action": authorization_action,
+                    "nonce_digest": nonce_digest,
+                    "request_digest": body_digest,
                     "occurred_at": now,
                     "resource_version": next_version,
                     "registry_digest": registry_digest,
@@ -652,6 +1374,15 @@ class SQLiteAssignmentStore:
                     "reason_code": "USER_CONFIRMED_ASSIGNMENT",
                     "checkpoint_id": None,
                 }
+                authority_fields = {
+                    "authorization_decision_id": authorization_decision_id,
+                    "authorization_policy_version": authorization_policy_version,
+                    "authorization_policy_digest": authorization_policy_digest,
+                    "authorization_assertion_digest": authorization_assertion_digest,
+                    "authorization_resource_digest": authorization_resource_digest,
+                }
+                if all(value is not None and value != "" for value in authority_fields.values()):
+                    assignment_event.update(authority_fields)
                 self._append_event(
                     conn,
                     tenant_id=tenant_id,
@@ -660,6 +1391,24 @@ class SQLiteAssignmentStore:
                     event_type=EventType.ASSIGNMENT_CREATED,
                     payload=assignment_event,
                 )
+                if all(value is not None and value != "" for value in authority_fields.values()):
+                    self._append_authority_bound_event(
+                        conn,
+                        event_id=assignment_id,
+                        actor_id_digest=actor_id_digest,
+                        tenant_digest=tenant_digest,
+                        company_digest=company_scope_digest,
+                        ipc_session_digest=session_id_digest,
+                        authorization_assertion_digest=authorization_assertion_digest,
+                        authorization_decision_id=authorization_decision_id,
+                        policy_version=authorization_policy_version,
+                        policy_digest=authorization_policy_digest,
+                        action=authorization_action,
+                        resource_digest=authorization_resource_digest,
+                        nonce_digest=nonce_digest,
+                        request_digest=body_digest,
+                        occurred_epoch_ms=now_ms,
+                    )
                 conn.execute(
                     """INSERT INTO current_assignments
                        (tenant_digest,txn_id,assignment_id,account_id,scope,resource_version,event_id)
@@ -686,7 +1435,7 @@ class SQLiteAssignmentStore:
                         "event_type": EventType.RULE_CREATED.value,
                         "assignment_id": assignment_id,
                         "rule_id": rule_id,
-                        "reason_code": "USER_RULE_SUGGESTION_CREATED",
+                        "reason_code": "ACTIVE_USER_RULE_CREATED",
                     }
                     self._append_event(
                         conn,
@@ -700,8 +1449,10 @@ class SQLiteAssignmentStore:
                         """INSERT INTO learned_rules
                            (rule_id,tenant_digest,vendor_match_token,adapter_family,normalization_version,
                             account_id,source_assignment_id,source_txn_id,registry_digest,overlay_digest,match_key_id,
-                            state,created_at,deactivated_at,resource_version)
-                           VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                            state,created_at,deactivated_at,resource_version,company_scope_digest,adapter_id,
+                            adapter_version,direction,currency,hmac_key_id,created_actor_digest,
+                            created_at_epoch_ms,deactivated_at_epoch_ms)
+                           VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                         (
                             rule_id,
                             tenant_digest,
@@ -714,21 +1465,30 @@ class SQLiteAssignmentStore:
                             registry_digest,
                             overlay_digest,
                             match_key_id,
-                            RuleState.ACTIVE_SUGGESTION.value,
+                            RuleState.ACTIVE_USER_RULE.value,
                             now,
                             None,
                             1,
+                            company_scope_digest,
+                            adapter_family,
+                            adapter_version,
+                            direction,
+                            currency,
+                            match_key_id,
+                            actor_id_digest,
+                            now_ms,
+                            None,
                         ),
                     )
 
                 response = {
-                    "schema_version": "2.0",
+                    "schema_version": "3.0",
                     "assignment_id": assignment_id,
                     "txn_id": txn_id,
                     "state": "USER_ASSIGNED",
                     "account_id": account_id,
                     "scope": scope,
-                    "rule_effect": "SUGGESTION_CREATED"
+                    "rule_effect": "ACTIVE_USER_RULE_CREATED"
                     if rule_id is not None
                     else "NONE",
                     "rule_id": rule_id,
@@ -743,6 +1503,9 @@ class SQLiteAssignmentStore:
                         "idempotency_digest": key_digest,
                     }
                 )
+                # Canonicalize the in-memory first response as well as the
+                # persisted replay so an exact idempotent retry is byte-identical.
+                response = json.loads(stable_json(response))
                 conn.execute(
                     """INSERT INTO idempotency_records
                        (tenant_digest,actor_id,route_id,resource_id,key_digest,body_digest,response_json,created_at)
@@ -758,7 +1521,38 @@ class SQLiteAssignmentStore:
                         now,
                     ),
                 )
+                nonce_update = conn.execute(
+                    """UPDATE accounting_action_nonces SET used_at_epoch_ms=?,request_digest=?,
+                       idempotency_digest=? WHERE nonce_digest=? AND used_at_epoch_ms IS NULL""",
+                    (now_ms, body_digest, key_digest, nonce_digest),
+                )
+                if nonce_update.rowcount != 1:
+                    raise AssignmentError("NONCE_REUSED", 409, "The user action nonce was already used.")
+                conn.execute(
+                    """UPDATE accounting_source_rows SET terminal_state='CLASSIFIED',
+                       classification_source=?,account_id=?,rule_id=?,transaction_version=?
+                       WHERE transaction_id=? AND batch_id=?""",
+                    (
+                        "USER_ASSIGNED_SAME_VENDOR_FUTURE" if scope == "SAME_VENDOR_FUTURE"
+                        else "USER_ASSIGNED_THIS_ONLY",
+                        account_id, rule_id, next_version, txn_id, batch_id,
+                    ),
+                )
+                conn.execute(
+                    """UPDATE accounting_source_batches SET unaccounted_count=unaccounted_count-1,
+                       classified_count=classified_count+1,resource_version=resource_version+1
+                       WHERE batch_id=?""",
+                    (batch_id,),
+                )
                 self._verify_checkpoint_in_transaction(conn, tenant_id, tenant_digest)
+                self._append_authorization_allow_if_present(
+                    conn,
+                    context=authority_context,
+                    reason_code="MUTATION_COMMITTED",
+                    before_hash=sha256_json(dict(current)) if current is not None else "0" * 64,
+                    after_hash=sha256_json(response),
+                    observed_at=now_ms,
+                )
                 conn.execute("COMMIT")
                 return CommitResult(response, False)
             except AssignmentError:
@@ -800,6 +1594,188 @@ class SQLiteAssignmentStore:
             raise AssignmentError(
                 "EVENT_CHECKPOINT_INVALID", 503, "The event checkpoint is invalid."
             )
+
+    def revert_rule_application(
+        self,
+        *,
+        tenant_id: str,
+        tenant_digest: str,
+        actor_id: str,
+        actor_id_digest: str,
+        session_id_digest: str,
+        device_id_digest: str,
+        permission_decision_digest: str,
+        txn_id: str,
+        expected_version: int,
+        registry_digest: str,
+        overlay_digest: str,
+        idempotency_key: str,
+        authority_context: TenantContext | None = None,
+    ) -> CommitResult:
+        """Revert one auto-applied draft without deleting its immutable receipt."""
+
+        route_id = "POST:/v1/accounting/review/transactions/{txn_id}/rule-application/revert"
+        key_digest = self.tokens.idempotency_digest(idempotency_key)
+        body_digest = sha256_json(
+            {"txn_id": txn_id, "expected_transaction_version": expected_version}
+        )
+        with self._lock, self._connect() as conn:
+            self._begin(conn)
+            try:
+                replay = self._idempotent_response(
+                    conn,
+                    tenant_digest=tenant_digest,
+                    actor_id=actor_id,
+                    route_id=route_id,
+                    resource_id=txn_id,
+                    key_digest=key_digest,
+                    body_digest=body_digest,
+                )
+                if replay is not None:
+                    conn.execute("COMMIT")
+                    return CommitResult(replay, True)
+
+                row = conn.execute(
+                    """SELECT r.*,b.tenant_digest FROM accounting_source_rows r
+                       JOIN accounting_source_batches b ON b.batch_id=r.batch_id
+                       WHERE r.transaction_id=? AND b.tenant_digest=?""",
+                    (txn_id, tenant_digest),
+                ).fetchone()
+                if row is None:
+                    raise AssignmentError(
+                        "AUTHORIZATION_DENIED", 404,
+                        "The accounting resource is unavailable.",
+                    )
+                if int(row["transaction_version"]) != expected_version:
+                    raise AssignmentError(
+                        "STALE_ASSIGNMENT_VERSION", 409,
+                        "The transaction changed before the rule application was reverted.",
+                        current_version=int(row["transaction_version"]),
+                    )
+                if (
+                    row["terminal_state"] != "CLASSIFIED"
+                    or row["classification_source"] != "USER_RULE_APPLIED_DRAFT"
+                    or not row["rule_id"]
+                ):
+                    raise AssignmentError(
+                        "TRANSACTION_NOT_REVIEWABLE", 409,
+                        "Only an active user-rule draft can be reverted.",
+                    )
+                receipt = conn.execute(
+                    """SELECT receipt_id FROM rule_application_receipts
+                       WHERE tenant_digest=? AND transaction_id=? AND rule_id=?
+                       ORDER BY applied_at_epoch_ms DESC LIMIT 1""",
+                    (tenant_digest, txn_id, row["rule_id"]),
+                ).fetchone()
+                if receipt is None:
+                    raise AssignmentError(
+                        "RULE_APPLICATION_RECEIPT_INVALID", 503,
+                        "The immutable rule application receipt is missing.",
+                    )
+
+                next_version = expected_version + 1
+                now = utc_now()
+                event = {
+                    "schema_version": "3.0",
+                    "event_id": str(uuid.uuid4()),
+                    "event_type": EventType.RULE_APPLICATION_REVERTED.value,
+                    "tenant_digest": tenant_digest,
+                    "batch_id": row["batch_id"],
+                    "txn_id": txn_id,
+                    "assignment_id": None,
+                    "supersedes_assignment_id": None,
+                    "rule_id": row["rule_id"],
+                    "account_id": row["account_id"],
+                    "scope": "THIS_ONLY",
+                    "actor_id": actor_id,
+                    "actor_id_digest": actor_id_digest,
+                    "session_id_digest": session_id_digest,
+                    "device_id_digest": device_id_digest,
+                    "permission_decision_digest": permission_decision_digest,
+                    "permission_policy_version": "capability-session.v1",
+                    "action": "ACCOUNTING_ASSIGN",
+                    "nonce_digest": "0" * 64,
+                    "request_digest": body_digest,
+                    "occurred_at": now,
+                    "resource_version": next_version,
+                    "registry_digest": registry_digest,
+                    "overlay_digest": overlay_digest,
+                    "match_key_id": row["hmac_key_id"],
+                    "normalization_version": None,
+                    "reason_code": "USER_REVERTED_RULE_APPLICATION_DRAFT",
+                    "checkpoint_id": None,
+                }
+                _, event_hash = self._append_event(
+                    conn,
+                    tenant_id=tenant_id,
+                    tenant_digest=tenant_digest,
+                    txn_id=txn_id,
+                    event_type=EventType.RULE_APPLICATION_REVERTED,
+                    payload=event,
+                )
+                updated = conn.execute(
+                    """UPDATE accounting_source_rows SET terminal_state='UNACCOUNTED',
+                       classification_source='REVIEW_REQUIRED',reason_code=?,account_id=NULL,
+                       rule_id=NULL,transaction_version=?
+                       WHERE row_id=? AND transaction_version=?""",
+                    (
+                        "USER_REVERTED_RULE_APPLICATION_DRAFT",
+                        next_version,
+                        row["row_id"],
+                        expected_version,
+                    ),
+                )
+                if updated.rowcount != 1:
+                    raise AssignmentError(
+                        "STALE_ASSIGNMENT_VERSION", 409,
+                        "The transaction changed before the rule application was reverted.",
+                    )
+                conn.execute(
+                    """UPDATE accounting_source_batches SET classified_count=classified_count-1,
+                       unaccounted_count=unaccounted_count+1,resource_version=resource_version+1
+                       WHERE batch_id=?""",
+                    (row["batch_id"],),
+                )
+                response = {
+                    "schema_version": "3.0",
+                    "txn_id": txn_id,
+                    "state": "UNACCOUNTED",
+                    "transaction_version": next_version,
+                    "rule_id": row["rule_id"],
+                    "preserved_receipt_id": receipt["receipt_id"],
+                    "event_hash": event_hash,
+                }
+                conn.execute(
+                    """INSERT INTO idempotency_records
+                       (tenant_digest,actor_id,route_id,resource_id,key_digest,body_digest,response_json,created_at)
+                       VALUES(?,?,?,?,?,?,?,?)""",
+                    (
+                        tenant_digest, actor_id, route_id, txn_id, key_digest,
+                        body_digest, stable_json(response), now,
+                    ),
+                )
+                self._verify_checkpoint_in_transaction(conn, tenant_id, tenant_digest)
+                self._append_authorization_allow_if_present(
+                    conn,
+                    context=authority_context,
+                    reason_code="MUTATION_COMMITTED",
+                    before_hash=sha256_json(dict(row)),
+                    after_hash=sha256_json(response),
+                    observed_at=int(datetime.now(timezone.utc).timestamp() * 1000),
+                )
+                conn.execute("COMMIT")
+                return CommitResult(response, False)
+            except AssignmentError:
+                if conn.in_transaction:
+                    conn.execute("ROLLBACK")
+                raise
+            except (sqlite3.DatabaseError, OSError) as exc:
+                if conn.in_transaction:
+                    conn.execute("ROLLBACK")
+                raise AssignmentError(
+                    "EVENT_CHECKPOINT_INVALID", 503,
+                    "The rule application revert was rolled back.",
+                ) from exc
 
     def verify_replay(self, tenant_id: str, tenant_digest: str) -> dict[str, Any]:
         with self._connect() as conn:
@@ -851,6 +1827,7 @@ class SQLiteAssignmentStore:
         registry_digest: str,
         overlay_digest: str,
         idempotency_key: str,
+        authority_context: TenantContext | None = None,
     ) -> dict[str, Any]:
         route_id = "POST:/v1/accounting/learned-rules/{rule_id}/deactivate"
         key_digest = self.tokens.idempotency_digest(idempotency_key)
@@ -887,7 +1864,7 @@ class SQLiteAssignmentStore:
                         "The rule changed before deactivation.",
                         current_version=row["resource_version"],
                     )
-                if row["state"] != RuleState.ACTIVE_SUGGESTION.value:
+                if row["state"] != RuleState.ACTIVE_USER_RULE.value:
                     raise AssignmentError(
                         "RULE_ALREADY_INACTIVE",
                         409,
@@ -897,7 +1874,7 @@ class SQLiteAssignmentStore:
                 now = utc_now()
                 event_id = rule_id + f"_deactivate_{next_version}"
                 payload = {
-                    "schema_version": "2.0",
+                    "schema_version": "3.0",
                     "event_id": event_id,
                     "event_type": EventType.RULE_DEACTIVATED.value,
                     "tenant_digest": tenant_digest,
@@ -951,6 +1928,14 @@ class SQLiteAssignmentStore:
                     ),
                 )
                 self._verify_checkpoint_in_transaction(conn, tenant_id, tenant_digest)
+                self._append_authorization_allow_if_present(
+                    conn,
+                    context=authority_context,
+                    reason_code="MUTATION_COMMITTED",
+                    before_hash=sha256_json(dict(row)),
+                    after_hash=sha256_json(response),
+                    observed_at=int(datetime.now(timezone.utc).timestamp() * 1000),
+                )
                 conn.execute("COMMIT")
                 return response
             except AssignmentError:
@@ -981,13 +1966,18 @@ class SQLiteAssignmentStore:
         account_id: str,
         vendor_match_token: str,
         adapter_family: str,
+        adapter_version: str,
         normalization_version: str,
+        company_scope_digest: str,
+        direction: str,
+        currency: str,
         registry_digest: str,
         overlay_digest: str,
         match_key_id: str,
         assignment_id: str,
         replacement_rule_id: str | None,
         idempotency_key: str,
+        authority_context: TenantContext | None = None,
     ) -> CommitResult:
         """Resolve a recorded conflict and apply every resulting effect atomically."""
         route_id = "POST:/v1/accounting/rule-conflicts/{conflict_id}/resolve"
@@ -1073,15 +2063,19 @@ class SQLiteAssignmentStore:
                 ).fetchone()
                 if (
                     existing is None
-                    or existing["state"] != RuleState.ACTIVE_SUGGESTION.value
+                    or existing["state"] != RuleState.ACTIVE_USER_RULE.value
                 ):
                     raise AssignmentError(
                         "CONFLICT_STALE", 412, "The existing rule is no longer active."
                     )
                 if (
                     existing["vendor_match_token"] != vendor_match_token
-                    or existing["adapter_family"] != adapter_family
+                    or existing["adapter_id"] != adapter_family
+                    or existing["adapter_version"] != adapter_version
                     or existing["normalization_version"] != normalization_version
+                    or existing["company_scope_digest"] != company_scope_digest
+                    or existing["direction"] != direction
+                    or existing["currency"] != currency
                 ):
                     raise AssignmentError(
                         "CONFLICT_EVIDENCE_INVALID",
@@ -1211,8 +2205,10 @@ class SQLiteAssignmentStore:
                         """INSERT INTO learned_rules
                            (rule_id,tenant_digest,vendor_match_token,adapter_family,normalization_version,
                             account_id,source_assignment_id,source_txn_id,registry_digest,overlay_digest,match_key_id,
-                            state,created_at,deactivated_at,resource_version)
-                           VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                            state,created_at,deactivated_at,resource_version,company_scope_digest,adapter_id,
+                            adapter_version,direction,currency,hmac_key_id,created_actor_digest,
+                            created_at_epoch_ms,deactivated_at_epoch_ms)
+                           VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                         (
                             replacement_rule_id,
                             tenant_digest,
@@ -1225,10 +2221,19 @@ class SQLiteAssignmentStore:
                             registry_digest,
                             overlay_digest,
                             match_key_id,
-                            RuleState.ACTIVE_SUGGESTION.value,
+                            RuleState.ACTIVE_USER_RULE.value,
                             now,
                             None,
                             1,
+                            company_scope_digest,
+                            adapter_family,
+                            adapter_version,
+                            direction,
+                            currency,
+                            match_key_id,
+                            hashlib.sha256(actor_id.encode("utf-8")).hexdigest(),
+                            int(datetime.now(timezone.utc).timestamp() * 1000),
+                            None,
                         ),
                     )
 
@@ -1252,16 +2257,16 @@ class SQLiteAssignmentStore:
                     (next_conflict_version, decision.value, now, conflict_id),
                 )
                 response = {
-                    "schema_version": "2.0",
-                    "conflict_id": conflict_id,
-                    "state": "RESOLVED",
-                    "decision": decision.value,
-                    "conflict_version": next_conflict_version,
+                    "schema_version": "3.0",
                     "assignment_id": assignment_id,
+                    "txn_id": txn_id,
+                    "state": "USER_ASSIGNED",
+                    "account_id": account_id,
+                    "scope": "SAME_VENDOR_FUTURE",
                     "transaction_version": next_transaction_version,
-                    "rule_effect": "SUGGESTION_REPLACED"
+                    "rule_effect": "ACTIVE_USER_RULE_REPLACED"
                     if decision is ConflictDecision.REPLACE_WITH_NEW
-                    else "EXISTING_SUGGESTION_KEPT",
+                    else "EXISTING_USER_RULE_KEPT",
                     "rule_id": replacement_rule_id
                     if decision is ConflictDecision.REPLACE_WITH_NEW
                     else existing["rule_id"],
@@ -1291,6 +2296,14 @@ class SQLiteAssignmentStore:
                     ),
                 )
                 self._verify_checkpoint_in_transaction(conn, tenant_id, tenant_digest)
+                self._append_authorization_allow_if_present(
+                    conn,
+                    context=authority_context,
+                    reason_code="MUTATION_COMMITTED",
+                    before_hash=sha256_json(dict(conflict)),
+                    after_hash=sha256_json(response),
+                    observed_at=int(datetime.now(timezone.utc).timestamp() * 1000),
+                )
                 conn.execute("COMMIT")
                 return CommitResult(response, False)
             except AssignmentError:

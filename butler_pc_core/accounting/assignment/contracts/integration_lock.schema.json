@@ -1,87 +1,66 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://butler.local/schemas/integration-lock-v1.json",
+  "$id": "https://butler.local/schemas/integration-lock-v2.json",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "schema_version",
     "repository",
-    "base_commit",
-    "base_tree",
-    "integration_branch",
-    "route_inventory_digest",
-    "contract_closure_digest",
-    "ui_tokens_digest",
-    "source_zip_digests",
+    "approved_base_commit",
+    "approved_base_tree",
+    "critical_files",
+    "critical_manifest_sha256",
+    "source_package_sha256",
     "allowed_paths",
     "owner",
     "created_at",
     "expires_at"
   ],
   "properties": {
-    "schema_version": {
-      "const": "butler.integration_lock.v1"
-    },
+    "schema_version": {"const": "butler.integration_lock.v2"},
     "repository": {
-      "type": "string",
-      "minLength": 1
+      "const": "github.com/tristan00037-tristan050/tristan050-ai_ondevice_APP"
     },
-    "base_commit": {
-      "type": "string",
-      "pattern": "^[0-9a-f]{40}$"
-    },
-    "base_tree": {
-      "type": "string",
-      "pattern": "^[0-9a-f]{40}$"
-    },
-    "integration_branch": {
-      "type": "string",
-      "minLength": 1
-    },
-    "route_inventory_digest": {
-      "type": "string",
-      "pattern": "^[0-9a-f]{64}$"
-    },
-    "contract_closure_digest": {
-      "type": "string",
-      "pattern": "^[0-9a-f]{64}$"
-    },
-    "ui_tokens_digest": {
-      "type": "string",
-      "pattern": "^[0-9a-f]{64}$"
-    },
-    "source_zip_digests": {
-      "type": "array",
-      "minItems": 2,
-      "uniqueItems": true,
-      "items": {
-        "type": "string",
-        "pattern": "^[0-9a-f]{64}$"
-      }
-    },
-    "allowed_paths": {
+    "approved_base_commit": {"$ref": "#/$defs/oid"},
+    "approved_base_tree": {"$ref": "#/$defs/oid"},
+    "critical_files": {
       "type": "object",
       "minProperties": 1,
-      "additionalProperties": {
-        "type": "array",
-        "minItems": 1,
-        "uniqueItems": true,
-        "items": {
-          "type": "string"
-        }
+      "propertyNames": {
+        "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\u0000]+$"
+      },
+      "additionalProperties": {"$ref": "#/$defs/fileIdentity"}
+    },
+    "critical_manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "source_package_sha256": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/sha256"}
+    },
+    "allowed_paths": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 256}
+    },
+    "owner": {"type": "string", "minLength": 1, "maxLength": 128},
+    "created_at": {"type": "string", "format": "date-time"},
+    "expires_at": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {
+    "oid": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "fileIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "blob_oid", "sha256", "size"],
+      "properties": {
+        "mode": {"enum": ["100644", "100755"]},
+        "blob_oid": {"$ref": "#/$defs/oid"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "size": {"type": "integer", "minimum": 1, "maximum": 33554432}
       }
-    },
-    "owner": {
-      "type": "string",
-      "minLength": 1
-    },
-    "created_at": {
-      "type": "string",
-      "format": "date-time"
-    },
-    "expires_at": {
-      "type": "string",
-      "format": "date-time"
     }
   }
 }
