@@ -72,7 +72,7 @@ def _open_dir_chain(path: Path) -> int:
             os.close(fd)
             fd = next_fd
         return fd
-    except BaseException:
+    except BaseException as _failure:
         os.close(fd)
         raise
 
@@ -89,7 +89,7 @@ def _open_relative_parent(root_fd: int, parts: tuple[str, ...]) -> int:
             os.close(fd)
             fd = next_fd
         return fd
-    except BaseException:
+    except BaseException as _failure:
         os.close(fd)
         raise
 
