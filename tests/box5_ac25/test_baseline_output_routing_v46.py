@@ -65,6 +65,20 @@ def test_actionlint_declares_only_required_custom_label() -> None:
     ]
 
 
+def test_changed_operational_sources_pass_repository_meta_only_guard() -> None:
+    completed = subprocess.run(
+        ["bash", "scripts/verify/verify_meta_only_output_guard_v1.sh"],
+        cwd=REPOSITORY,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stdout
+    assert completed.stderr == ""
+    success_marker = "META_ONLY_OUTPUT_GUARD_V1_" + "OK" + "=1"
+    assert success_marker in completed.stdout.splitlines()
+
+
 def test_ac25_generator_writes_json_and_markdown_outside_repository(
     external_roots,
 ) -> None:

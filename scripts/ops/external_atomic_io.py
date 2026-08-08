@@ -65,6 +65,7 @@ def _open_absolute_directory(value: Path) -> int:
     parts = _canonical_parts(value, absolute_error="OUTPUT_PATH_NOT_ABSOLUTE")
     flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
     descriptor = os.open("/", flags)
+    completed = False
     try:
         for component in parts:
             try:
@@ -73,15 +74,17 @@ def _open_absolute_directory(value: Path) -> int:
                 raise ExternalWriteError("OUTPUT_PATH_SYMLINK_COMPONENT") from exc
             os.close(descriptor)
             descriptor = next_descriptor
+        completed = True
         return descriptor
-    except BaseException:
-        os.close(descriptor)
-        raise
+    finally:
+        if not completed:
+            os.close(descriptor)
 
 
 def _open_relative_directory(root_descriptor: int, parts: tuple[str, ...]) -> int:
     flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
     descriptor = os.dup(root_descriptor)
+    completed = False
     try:
         for component in parts:
             try:
@@ -90,10 +93,11 @@ def _open_relative_directory(root_descriptor: int, parts: tuple[str, ...]) -> in
                 raise ExternalWriteError("OUTPUT_PATH_SYMLINK_COMPONENT") from exc
             os.close(descriptor)
             descriptor = next_descriptor
+        completed = True
         return descriptor
-    except BaseException:
-        os.close(descriptor)
-        raise
+    finally:
+        if not completed:
+            os.close(descriptor)
 
 
 def _identity(descriptor: int) -> tuple[int, int]:
