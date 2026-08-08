@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from ac25 import strict_receipt_validator
+from ac25 import repo_contract_runner, strict_receipt_validator
 from ac25.strict_receipt import StrictReceiptError
 from ac25.strict_v44 import require_authority_verdict, validate_strict_receipt
 from ac25.v44_types import StrictValidationVerdict
@@ -92,3 +92,12 @@ def test_candidate_execution_must_be_pull_request():
     verdict = validate_strict_receipt(replace(inp, remote=remote))
     assert verdict.ok is False
     assert "REMOTE_SCHEMA_UNSUPPORTED" in verdict.failures
+
+
+def test_v44_contract_entrypoint_is_measured_but_not_base_equality_blocked():
+    path = "scripts/verify/verify_repo_contracts.sh"
+    assert path in repo_contract_runner.PROTECTED_GUARD_PATHS
+    assert path not in repo_contract_runner.MUTATION_FORBIDDEN_GUARD_PATHS
+    assert set(repo_contract_runner.MUTATION_FORBIDDEN_GUARD_PATHS) == set(
+        repo_contract_runner.PROTECTED_GUARD_PATHS
+    ) - {path}

@@ -77,6 +77,10 @@ PROTECTED_GUARD_PATHS = (
     "scripts/verify/verify_ssot_registry_consumer_bind_v1.sh",
     "scripts/verify/verify_no_raw_in_logs_exceptions_v1.sh",
 )
+# v4.4 explicitly changes the contract entrypoint and executes that exact-head
+# candidate. Its blob remains measured above; the unchanged helper guards keep
+# the base-equality restriction during Phase A.
+MUTATION_FORBIDDEN_GUARD_PATHS = PROTECTED_GUARD_PATHS[1:]
 
 CONTRACT_COMMAND = ("bash", "scripts/verify/verify_repo_contracts.sh")
 BASE_REF_SCRIPT = "scripts/verify/verify_base_ref_available_v1.sh"
@@ -319,11 +323,14 @@ def guard_blob_oids(*, root: Path, runner_temp: Path, env) -> dict[str, str]:
 
 
 def assert_guards_unmodified(*, root: Path, base_ref: str, runner_temp: Path, env) -> None:
-    """base 대비 guard 변경 0. 변경이 있으면 계약을 돌리기 전에 닫는다."""
+    """Reject base drift in helper guards outside the authorized v4.4 delta."""
     if not base_ref:
         return
     code, out, _err = _run(
-        ("git", "diff", "--name-only", "-z", base_ref, "HEAD", "--", *PROTECTED_GUARD_PATHS),
+        (
+            "git", "diff", "--name-only", "-z", base_ref, "HEAD", "--",
+            *MUTATION_FORBIDDEN_GUARD_PATHS,
+        ),
         root=root, cwd=".", runner_temp=runner_temp, env=env,
     )
     if code != 0:
@@ -871,6 +878,7 @@ __all__ = [
     "CLEAN_OUTPUT_INVALID",
     "CLEAN_PATH_INVALID",
     "CONTRACT_COMMAND",
+    "MUTATION_FORBIDDEN_GUARD_PATHS",
     "PROTECTED_GUARD_PATHS",
     "REPO_CONTRACTS_BASE_REF_UNAVAILABLE",
     "REPO_CONTRACTS_CANONICAL_ACTION_MISMATCH",
