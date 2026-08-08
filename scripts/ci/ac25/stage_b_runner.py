@@ -217,9 +217,26 @@ def run_selftest(plan: StageBPlan) -> dict:
 
     suites = list(root.iter("testsuite")) if root.tag == "testsuites" else [root]
     totals = {"tests": 0, "failures": 0, "errors": 0, "skipped": 0}
+    failed_identity_hashes: list[str] = []
     for suite in suites:
         for key in totals:
             totals[key] += int(suite.get(key, "0") or 0)
+        for case in suite.findall("testcase"):
+            if any(child.tag in ("failure", "error") for child in case):
+                identity = json.dumps(
+                    {
+                        "classname": case.get("classname", ""),
+                        "name": case.get("name", ""),
+                    },
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                    sort_keys=True,
+                ).encode("utf-8")
+                failed_identity_hashes.append(hashlib.sha256(identity).hexdigest())
+
+    failed_manifest = json.dumps(
+        failed_identity_hashes, separators=(",", ":")
+    ).encode("utf-8")
 
     summary = {
         "tests_total": totals["tests"],
@@ -227,6 +244,11 @@ def run_selftest(plan: StageBPlan) -> dict:
         "tests_skipped": totals["skipped"],
         "tests_passed": totals["tests"] - totals["failures"] - totals["errors"] - totals["skipped"],
         "junit_sha256": hashlib.sha256(raw).hexdigest(),
+        # Meta-only diagnostics: no test name/path leaves the protected runner.
+        "first_failed_test_sha256": (
+            failed_identity_hashes[0] if failed_identity_hashes else "NONE"
+        ),
+        "failed_test_manifest_sha256": hashlib.sha256(failed_manifest).hexdigest(),
     }
     (reports / SELFTEST_SUMMARY_FILENAME).write_text(
         json.dumps(summary, sort_keys=True, indent=2) + "\n", encoding="utf-8"
@@ -268,6 +290,28 @@ def _main(argv: list[str]) -> int:
         # ★meta-only(§9): 코드 하나만 낸다
         print("VERDICT=0")
         print(f"ERROR_CODE={exc.code}")
+        if isinstance(exc, StageBRunnerError) and exc.code == STAGE_B_SELFTEST_FAILED:
+            try:
+                summary = json.loads(
+                    (_report_directory() / SELFTEST_SUMMARY_FILENAME).read_text(
+                        encoding="utf-8"
+                    )
+                )
+                failed = summary["tests_failed"]
+                first = summary["first_failed_test_sha256"]
+                manifest = summary["failed_test_manifest_sha256"]
+                if (
+                    isinstance(failed, int)
+                    and failed > 0
+                    and (first == "NONE" or (isinstance(first, str) and len(first) == 64))
+                    and isinstance(manifest, str)
+                    and len(manifest) == 64
+                ):
+                    print(f"TESTS_FAILED_COUNT={failed}")
+                    print(f"FIRST_FAILED_TEST_SHA256={first}")
+                    print(f"FAILED_TEST_MANIFEST_SHA256={manifest}")
+            except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+                pass
         return 1
     print("VERDICT=1")
     print("ERROR_CODE=OK")

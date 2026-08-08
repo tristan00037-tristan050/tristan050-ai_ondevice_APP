@@ -203,6 +203,17 @@ def _junit(path: Path, *, tests=5, failures=0, errors=0, skipped=0) -> None:
     )
 
 
+def _junit_with_failure(path: Path) -> None:
+    path.write_text(
+        '<?xml version="1.0"?><testsuites><testsuite name="p" tests="2" '
+        'failures="1" errors="0" skipped="0">'
+        '<testcase classname="suite.Case" name="test_ok"/>'
+        '<testcase classname="suite.Case" name="test_failed"><failure/></testcase>'
+        '</testsuite></testsuites>',
+        encoding="utf-8",
+    )
+
+
 @pytest.fixture
 def selftest_plan(trusted, worktree, tmp_path, monkeypatch):
     monkeypatch.setenv("RUNNER_TEMP", str(tmp_path / "runner"))
@@ -278,10 +289,35 @@ def test_selftest_writes_meta_only_summary(selftest_plan, tmp_path, monkeypatch)
         (tmp_path / "runner" / sbr.SELFTEST_SUMMARY_FILENAME).read_text()
     )
     assert set(written) == {
-        "tests_total", "tests_failed", "tests_skipped", "tests_passed", "junit_sha256"
+        "tests_total", "tests_failed", "tests_skipped", "tests_passed", "junit_sha256",
+        "first_failed_test_sha256", "failed_test_manifest_sha256",
     }
     for value in written.values():
         assert isinstance(value, (int, str))
+
+
+def test_failed_selftest_emits_only_hashed_identity(
+    selftest_plan, tmp_path, monkeypatch, capsys
+):
+    def fake_run(argv, **_kwargs):
+        _junit_with_failure(Path(tmp_path / "runner") / sbr.JUNIT_FILENAME)
+        return 0, b"", b""
+
+    monkeypatch.setattr(sbr.output_containment, "run_and_read", fake_run)
+    (tmp_path / "runner").mkdir(parents=True, exist_ok=True)
+    result = sbr._main([
+        "--trusted-root", str(selftest_plan.trusted_root),
+        "--worktree", str(selftest_plan.worktree),
+        "--mode", "smoke",
+    ])
+    lines = capsys.readouterr().out.splitlines()
+    assert result == 1
+    assert lines[0:2] == ["VERDICT=0", f"ERROR_CODE={sbr.STAGE_B_SELFTEST_FAILED}"]
+    assert "TESTS_FAILED_COUNT=1" in lines
+    first = next(line.split("=", 1)[1] for line in lines if line.startswith("FIRST_FAILED_TEST_SHA256="))
+    manifest = next(line.split("=", 1)[1] for line in lines if line.startswith("FAILED_TEST_MANIFEST_SHA256="))
+    assert len(first) == len(manifest) == 64
+    assert "test_failed" not in "\n".join(lines)
 
 
 # ══ 워크플로가 명령을 조립하지 않는다 ══════════════════════════════════
