@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 
 function loadRequiredKeysSSOT() {
   const ssotPath = path.resolve("docs/ops/contracts/AUTODECISION_REQUIRED_KEYS_V1.txt");
@@ -47,16 +48,87 @@ function collectKeys(obj) {
   return keys;
 }
 
+function writeExternalBytes({ repoRoot, evidenceRoot, output, payload }) {
+  const writer = path.join(repoRoot, "scripts/ops/external_atomic_io.py");
+  const result = spawnSync(
+    "python3",
+    [
+      writer,
+      "--repo-root", repoRoot,
+      "--evidence-root", evidenceRoot,
+      "--output", output,
+      "--max-payload-bytes", String(16 * 1024 * 1024),
+    ],
+    {
+      cwd: repoRoot,
+      encoding: "utf8",
+      input: payload,
+      maxBuffer: 64 * 1024,
+      windowsHide: true,
+    },
+  );
+  if (result.status !== 0) {
+    throw new Error("EXTERNAL_WRITER_FAILED");
+  }
+}
+
+function writeAutodecisionOutputs({
+  repoRoot,
+  evidenceRoot,
+  outJson,
+  outMd,
+  jsonBytes,
+  markdownBytes,
+}) {
+  if (evidenceRoot) {
+    writeExternalBytes({
+      repoRoot,
+      evidenceRoot,
+      output: outJson,
+      payload: jsonBytes,
+    });
+    writeExternalBytes({
+      repoRoot,
+      evidenceRoot,
+      output: outMd,
+      payload: markdownBytes,
+    });
+    return;
+  }
+
+  // Compatibility path for non-AC25 workflows that intentionally publish
+  // repository reports. AC25 execution can never reach this branch.
+  fs.writeFileSync(outJson, jsonBytes, { mode: 0o600 });
+  fs.writeFileSync(outMd, markdownBytes, { mode: 0o600 });
+}
+
 function main() {
-  const reportsRoot = process.env.AUTODECISION_REPORTS_ROOT || "docs/ops/reports";
-  const repoPath = `${reportsRoot}/repo_contracts_latest.json`;
-  const repoPathResolved = fs.existsSync(repoPath) ? repoPath : "docs/ops/reports/repo_contracts_latest.json";
+  const repoRoot = path.resolve(".");
+  const legacyReportsRoot = process.env.AUTODECISION_REPORTS_ROOT;
+  const inputReportsRoot = path.resolve(
+    process.env.AUTODECISION_INPUT_REPORTS_ROOT
+      || legacyReportsRoot
+      || "docs/ops/reports",
+  );
+  const evidenceRootRaw = process.env.AC25_EVIDENCE_ROOT || "";
+  const evidenceRoot = evidenceRootRaw ? path.resolve(evidenceRootRaw) : "";
+  const configuredOutputRoot = process.env.AUTODECISION_OUTPUT_REPORTS_ROOT || "";
+  if (evidenceRoot && !configuredOutputRoot) {
+    throw new Error("AUTODECISION_OUTPUT_ROOT_REQUIRED");
+  }
+  const outputReportsRoot = path.resolve(
+    configuredOutputRoot || legacyReportsRoot || "docs/ops/reports",
+  );
+
+  const repoPath = path.join(inputReportsRoot, "repo_contracts_latest.json");
+  const repoFallback = path.join(repoRoot, "docs/ops/reports/repo_contracts_latest.json");
+  const repoPathResolved = fs.existsSync(repoPath) ? repoPath : repoFallback;
   const allowDocsRepoFallback = process.env.AUTODECISION_ALLOW_DOCS_REPO_FALLBACK === "1";
   const maxAgeSec = Number(process.env.AUTODECISION_DOCS_REPO_FALLBACK_MAX_AGE_SEC || "3600"); // default 1h
   let repoFallbackUsed = 0;
 
   // If reportsRoot is non-default and repoPath is missing, do NOT silently fall back unless explicitly allowed.
-  if (!fs.existsSync(repoPath) && !allowDocsRepoFallback) {
+  if (!fs.existsSync(repoPath) && (evidenceRoot || !allowDocsRepoFallback)) {
     throw new Error("BLOCK: missing " + repoPath + " (docs fallback disabled; set AUTODECISION_ALLOW_DOCS_REPO_FALLBACK=1 only for controlled pre-report runs)");
   }
 
@@ -71,12 +143,16 @@ function main() {
     repoFallbackUsed = 1;
   }
 
-  const aiPath = `${reportsRoot}/ai_smoke_latest.json`;
-  const outJson = `${reportsRoot}/autodecision_latest.json`;
-  const outMd = `${reportsRoot}/autodecision_latest.md`;
+  const aiPath = path.join(inputReportsRoot, "ai_smoke_latest.json");
+  const outJson = path.join(outputReportsRoot, "autodecision_latest.json");
+  const outMd = path.join(outputReportsRoot, "autodecision_latest.md");
 
   if (!fs.existsSync(repoPathResolved)) throw new Error("BLOCK: missing " + repoPath + " and fallback " + repoPathResolved);
-  const aiPathResolved = fs.existsSync(aiPath) ? aiPath : "docs/ops/reports/ai_smoke_latest.json";
+  const aiFallback = path.join(repoRoot, "docs/ops/reports/ai_smoke_latest.json");
+  const aiPathResolved = fs.existsSync(aiPath) ? aiPath : aiFallback;
+  if (evidenceRoot && !fs.existsSync(aiPath)) {
+    throw new Error("BLOCK: AC25 input fallback disabled");
+  }
   if (!fs.existsSync(aiPathResolved)) throw new Error("BLOCK: missing " + aiPath + " and fallback " + aiPathResolved);
 
   const repo = readJson(repoPathResolved);
@@ -145,15 +221,20 @@ function main() {
     autodecision_missing_required_keys_count: missingRequiredCount,
     inputs: {
       repo_contracts_fallback_used: repoFallbackUsed,
-      repo_contracts_latest_json: repoPathResolved,
-      ai_smoke_latest_json: aiPathResolved
+      repo_contracts_latest_json: "repo_contracts_latest.json",
+      ai_smoke_latest_json: "ai_smoke_latest.json"
     }
   };
 
-  fs.mkdirSync(reportsRoot, { recursive: true });
-  fs.writeFileSync(outJson, JSON.stringify(payload));
-  fs.writeFileSync(
-    outMd,
+  if (evidenceRoot) {
+    if (!fs.existsSync(outputReportsRoot)) {
+      throw new Error("AUTODECISION_OUTPUT_ROOT_MISSING");
+    }
+  } else {
+    fs.mkdirSync(outputReportsRoot, { recursive: true, mode: 0o700 });
+  }
+  const jsonBytes = Buffer.from(JSON.stringify(payload), "utf8");
+  const markdownBytes = Buffer.from(
     [
       "# Auto Decision (latest)",
       "",
@@ -164,10 +245,27 @@ function main() {
       ...reason_codes.map((x) => `- ${x}`),
       "",
       "## inputs",
-      `- ${repoPath}`,
-      `- ${aiPath}`
-    ].join("\n")
+      "- repo_contracts_latest.json",
+      "- ai_smoke_latest.json"
+    ].join("\n"),
+    "utf8",
   );
+  writeAutodecisionOutputs({
+    repoRoot,
+    evidenceRoot,
+    outJson,
+    outMd,
+    jsonBytes,
+    markdownBytes,
+  });
 }
 
-main();
+try {
+  main();
+  console.log("AUTODECISION_GENERATED=1");
+  console.log("ERROR_CODE=NONE");
+} catch (_error) {
+  console.log("AUTODECISION_GENERATED=0");
+  console.log("ERROR_CODE=AUTODECISION_GENERATION_FAILED");
+  process.exitCode = 1;
+}
