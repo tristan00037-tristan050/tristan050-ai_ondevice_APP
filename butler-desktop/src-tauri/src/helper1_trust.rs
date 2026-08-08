@@ -64,7 +64,7 @@ pub fn get_helper1_execution_trust_anchor(
         schema_version: "butler.helper1.execution-trust-anchor.v1",
         public_key_b64: public_key_b64.to_string(),
         public_key_sha256: observed_digest,
-        session_digest: format!("{:x}", Sha256::digest(&token)),
+        session_digest: format!("{:x}", Sha256::digest(token)),
         subject_commit: subject_commit.to_string(),
         subject_tree: subject_tree.to_string(),
     })
