@@ -39,6 +39,9 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+          # The protected self-test exercises pinned commit/tree coordinates.
+          # A depth-1 clone turns those positive tests into GIT_OBJECT_NOT_FOUND.
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Set up Python 3.12

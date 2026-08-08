@@ -399,6 +399,14 @@ def test_actions_are_recorded_with_inputs_not_faked_as_commands():
         assert not step.argv[0].startswith("actions/")
 
 
+def test_stage_a_selftest_checkout_has_complete_history():
+    source = (REPO_ROOT / cp.EXECUTION_WORKFLOW_PATH).read_text(encoding="utf-8")
+    stage_b = source.split("ac25-stage-b-smoke:", 1)[1].split(
+        "ac25-merge-reproducibility:", 1
+    )[0]
+    assert "fetch-depth: 0" in stage_b
+
+
 def test_contract_environment_is_extracted():
     plan = cp.extract_canonical_plan(REPO_ROOT, runner_temp="/runner/temp")
     env = dict(plan.contract_env)

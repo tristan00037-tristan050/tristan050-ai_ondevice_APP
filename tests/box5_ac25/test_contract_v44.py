@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -88,6 +89,45 @@ def test_production_shell_has_one_primary_printf():
     source = SCRIPT.read_text(encoding="utf-8")
     calls = re.findall(r"printf\s+'%s\\n'\s+\"REPO_CONTRACTS_FAILED_GUARD=", source)
     assert len(calls) == 1
+
+
+def test_cleanup_emits_every_guard_key_at_most_once():
+    source = SCRIPT.read_text(encoding="utf-8")
+    cleanup = _function(source, "cleanup")
+    keys = re.findall(r'echo "([A-Z][A-Z0-9_]*_OK)=\$\{\1\}"', cleanup)
+    duplicates = sorted(key for key, count in Counter(keys).items() if count > 1)
+    assert duplicates == []
+
+
+def test_freshness_probe_is_not_reemitted_before_cleanup():
+    source = SCRIPT.read_text(encoding="utf-8")
+    assert re.search(r'^\s*echo "\$freshness_output"\s*$', source, re.MULTILINE) is None
+
+
+def test_run_guard_never_forwards_child_diagnostics():
+    source = SCRIPT.read_text(encoding="utf-8")
+    run_guard = _function(source, "run_guard")
+    fixture = f"""set -euo pipefail
+CURRENT_GUARD=NONE
+{run_guard}
+run_guard sample bash -c 'printf "UNREGISTERED_DIAGNOSTIC\\nSAMPLE_OK=1\\n"'
+printf 'VALUE=%s\\n' "${{SAMPLE_OK}}"
+"""
+    result = subprocess.run(["bash", "-c", fixture], text=True, capture_output=True)
+    assert result.returncode == 0
+    assert result.stdout.splitlines() == ["== guard: sample ==", "VALUE=1"]
+
+
+def test_fixed_meta_error_code_and_skip_are_not_guard_inventory():
+    result = contract_parse.parse_contract_observation(
+        b"== guard: sample, exact ==\n"
+        b"ERROR_CODE=NONE\n"
+        b"SKIP: optional enforcement=0\n"
+        b"REPO_CONTRACTS_FAILED_GUARD=NONE\n"
+        b"SAMPLE_OK=1\n"
+    )
+    assert result.parse_error_code == contract_parse.PARSE_OK
+    assert result.guard_items == ((0, "SAMPLE_OK", "1"),)
 
 
 def test_duplicate_primary_rejected_before_mapping():

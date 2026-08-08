@@ -170,6 +170,25 @@ def test_canonical_env_is_bound_to_steps_and_contract(repo, world, tmp_path):
     assert "PLAYWRIGHT_BROWSERS_PATH" in receipt.preparation_env_keys
 
 
+def test_contract_keeps_canonical_artifact_proof_root_separate_from_receipt_root(
+    repo, world, tmp_path
+):
+    """The pre-verify generator and contract must address the same proof bytes."""
+    receipt_root = tmp_path / "private-contract-receipt"
+    receipt = run(
+        repo,
+        tmp_path,
+        env={
+            "PATH": "/usr/bin",
+            "AC25_CONTRACT_EVIDENCE_ROOT": str(receipt_root),
+            "AC25_EVIDENCE_ROOT": str(receipt_root),
+        },
+    )
+    assert receipt.verdict == 1
+    assert world.contract_env["AC25_EVIDENCE_ROOT"] == str(tmp_path / "ac25-evidence")
+    assert world.contract_env["AC25_EVIDENCE_ROOT"] != str(receipt_root)
+
+
 # ══ §4-4 ① contract 실패 후에도 finally clean 검사가 실행됨 ═══════════
 def test_clean_is_measured_in_finally_even_when_contract_fails(repo, world, tmp_path):
     world.contract_exit = 1

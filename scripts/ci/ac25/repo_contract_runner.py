@@ -608,8 +608,11 @@ def run_exact_head_contracts(
             contract_env = contract_environment(
                 root, base_env=environment, runner_temp=str(temp)
             )
-            if evidence_root is not None:
-                contract_env["AC25_EVIDENCE_ROOT"] = str(evidence_root)
+            # Keep the canonical workflow's AC25_EVIDENCE_ROOT.  The canonical
+            # preparation wrote the artifact-chain proof there; evidence_root
+            # is the runner's separate private receipt directory.  Collapsing
+            # the two roots makes the exact contract read a different,
+            # unpopulated directory and fail with a false missing-proof result.
             receipt.contract_env_keys = sorted(
                 key for key, _value in expected.contract_env
             )

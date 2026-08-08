@@ -663,9 +663,6 @@ ONPREM_DELIVERED_KEYSET_GUARD_OK=0
 cleanup(){
   # DoD block 밖: primary가 아닌 meta-only 진단만 출력한다.
   echo "REPO_CONTRACTS_LAST_GUARD=${CURRENT_GUARD}"
-  echo "REPO_GUARD_KEYS_ONLY_MODE_OK=${REPO_GUARD_KEYS_ONLY_MODE_OK}"
-  echo "META_ONLY_OUTPUT_GUARD_V1_OK=${META_ONLY_OUTPUT_GUARD_V1_OK}"
-  echo "PATH_SCOPE_READ_REQUIRED_OK=${PATH_SCOPE_READ_REQUIRED_OK}"
   echo "DOD_KV_BLOCK_BEGIN=1"
   echo "RUN_GUARD_TARGETS_EXIST_OK=${RUN_GUARD_TARGETS_EXIST_OK}"
   echo "MERGE_GROUP_REQUIRED_WORKFLOWS_COVERED_OK=${MERGE_GROUP_REQUIRED_WORKFLOWS_COVERED_OK}"
@@ -713,9 +710,6 @@ cleanup(){
   echo "EXPORT_APPROVE_AUDIT_V2_OK=${EXPORT_APPROVE_AUDIT_V2_OK}"
 
   echo "MOCK_NETWORK_ZERO_OK=${MOCK_NETWORK_ZERO_OK}"
-
-  echo "PROD_DELIVERED_KEYSET_PRESENT_OK=${PROD_DELIVERED_KEYSET_PRESENT_OK}"
-  echo "PROD_DELIVERED_KEYSET_GUARD_OK=${PROD_DELIVERED_KEYSET_GUARD_OK}"
 
   echo "PERF_P95_BUDGET_DEFINED_OK=${PERF_P95_BUDGET_DEFINED_OK}"
   echo "PERF_P95_CONTRACT_OK=${PERF_P95_CONTRACT_OK}"
@@ -1064,8 +1058,8 @@ cleanup(){
   echo "AI_VARIANCE_OK=${AI_VARIANCE_OK}"
   echo "AI_OUTLIER_RATIO_OK=${AI_OUTLIER_RATIO_OK}"
 
-  # P4-AI-03 (AI) Energy proxy SSOT + stability gate
-  echo "AI_ENERGY_PROXY_DEFINITION_SSOT_OK=${AI_ENERGY_PROXY_DEFINITION_SSOT_OK}"
+  # P4-AI-03 (AI) Energy proxy stability gate.  The shared SSOT key is emitted
+  # once in the P2-AI-02 block above so the contract has no duplicate keys.
   echo "AI_ENERGY_MEASUREMENTS_SOURCE_OK=${AI_ENERGY_MEASUREMENTS_SOURCE_OK}"
   echo "AI_ENERGY_STABILITY_OK=${AI_ENERGY_STABILITY_OK}"
 
@@ -1257,7 +1251,6 @@ run_guard() {
   if "${script_or_cmd[@]}" >"$tmp_out" 2>&1; then
     :
   else
-    grep -vE '^[A-Z0-9_]+_OK=[0-9]+$' "$tmp_out" || true
     rm -f "$tmp_out"
     echo "FAIL: ${name}"
     exit 1
@@ -1275,8 +1268,6 @@ run_guard() {
         ;;
     esac
   done < <(grep -E '^[A-Z0-9_]+_OK=[01]$' "$tmp_out" || true)
-
-  grep -vE '^[A-Z0-9_]+_OK=[0-9]+$' "$tmp_out" || true
 
   rm -f "$tmp_out"
 }
@@ -1592,11 +1583,9 @@ ONPREM_LATEST_LONG_LINE_BLOCK_V1_OK=1
 echo "== guard: onprem proof freshness =="
 CURRENT_GUARD="onprem proof freshness"
 if ! freshness_output="$(bash scripts/verify/verify_onprem_proof_freshness.sh)"; then
-  echo "$freshness_output"
   echo "FAIL: onprem proof freshness"
   exit 1
 fi
-echo "$freshness_output"
 if echo "$freshness_output" | grep -q '^ONPREM_PROOF_LATEST_FRESH_OK=1$'; then
   ONPREM_PROOF_LATEST_FRESH_OK=1
 elif echo "$freshness_output" | grep -q '^ONPREM_PROOF_LATEST_FRESH_SKIPPED=1$'; then

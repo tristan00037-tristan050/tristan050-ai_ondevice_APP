@@ -27,14 +27,15 @@ _META_LINE_RE = re.compile(r"\A([A-Z][A-Z0-9_]{2,79})=([A-Za-z0-9 ._:/()+-]{1,18
 _GUARD_KEY_RE = re.compile(r"\A[A-Z][A-Z0-9_]{0,76}_OK\Z")
 _FIXED_META_KEYS = frozenset(
     {
-        "DOD_KV_BLOCK_BEGIN", "DOD_KV_BLOCK_END", "P0_02_KEYS_ONLY_VAL",
+        "DOD_KV_BLOCK_BEGIN", "DOD_KV_BLOCK_END", "ERROR_CODE", "P0_02_KEYS_ONLY_VAL",
         "REPO_CONTRACTS_LAST_GUARD",
     }
 )
 _META_KEY_RE = re.compile(r"\A[A-Z][A-Z0-9_]{0,70}_SKIPPED\Z")
 _BLOCK_LINE_RE = re.compile(r"\ABLOCK: [A-Za-z0-9 ._:/()<>=-]{1,180}\Z")
 _FAIL_LINE_RE = re.compile(r"\AFAIL: [A-Za-z0-9 ._:/()<>=-]{1,180}\Z")
-_BANNER_LINE_RE = re.compile(r"\A== guard: [A-Za-z0-9 ._:/()+-]{1,180} ==\Z")
+_BANNER_LINE_RE = re.compile(r"\A== guard: [A-Za-z0-9 ,._:/()+-]{1,180} ==\Z")
+_SKIP_LINE_RE = re.compile(r"\ASKIP: [A-Za-z0-9 ,._:/()=+-]{1,180}\Z")
 _BLOCK_LINE_LIMIT = 8
 _PRIMARY_VALUE_RE = re.compile(r"\A[A-Za-z0-9 ._:/()\-]+\Z")
 _PRIMARY_MAX_BYTES = 160
@@ -170,7 +171,12 @@ def parse_contract_observation(stdout: bytes) -> ContractObservation:
         is_block = _BLOCK_LINE_RE.fullmatch(value_line) is not None and block_count < _BLOCK_LINE_LIMIT
         if is_block:
             block_count += 1
-        if is_block or _FAIL_LINE_RE.fullmatch(value_line) or _BANNER_LINE_RE.fullmatch(value_line):
+        if (
+            is_block
+            or _FAIL_LINE_RE.fullmatch(value_line)
+            or _BANNER_LINE_RE.fullmatch(value_line)
+            or _SKIP_LINE_RE.fullmatch(value_line)
+        ):
             meta.append((ordinal, None, None))
             lines.append(_line(ordinal, ContractLineKind.META, raw))
             continue
